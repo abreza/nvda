@@ -15,33 +15,32 @@ from speech.commands import (
 	RateCommand,
 	VolumeCommand,
 )
-from synthDriverHandler import SynthDriver, VoiceInfo, synthIndexReached, synthDoneSpeaking
+import synthDriverHandler
+from synthDriverHandler import VoiceInfo, synthIndexReached, synthDoneSpeaking
 from ._piper import BgThread, isPiperAvailable, loadVoice
 
 
 DEFAULT_VOICE_DIR = os.path.join(os.path.dirname(__file__), "piper_voices")
 
 
-class SynthDriver(SynthDriver):
+class SynthDriver(synthDriverHandler.SynthDriver):
 	name = "piper"
-	description = "Piper TTS"
+	# Translators: Description for a speech synthesizer.
+	description = _("Piper Neural TTS")
 
-	supportedSettings = [
-		SynthDriver.VoiceSetting(),
-		SynthDriver.VariantSetting(),
-		SynthDriver.RateSetting(),
-		NumericDriverSetting(
-			"pitch",
-			_("&Pitch"),
-			minStep=1,
-		),
-		SynthDriver.VolumeSetting(),
+	supportedSettings = (
+		synthDriverHandler.SynthDriver.VoiceSetting(),
+		synthDriverHandler.SynthDriver.VariantSetting(),
+		synthDriverHandler.SynthDriver.RateSetting(),
+		synthDriverHandler.SynthDriver.PitchSetting(),
+		synthDriverHandler.SynthDriver.VolumeSetting(),
 		BooleanDriverSetting(
 			"usePersianPhonemizer",
+			# Translators: This is the label for a setting in voice settings dialog.
 			_("Use enhanced &Persian phonemizer"),
-			defaultVal=True,
+			defaultVal=False,
 		),
-	]
+	)
 
 	supportedCommands = {
 		IndexCommand,
@@ -184,8 +183,6 @@ class SynthDriver(SynthDriver):
 			self._currentVoiceId = voice_id
 			self._variant = "0"
 
-	voice = property(_get_voice, _set_voice)
-
 	def _getAvailableVoices(self) -> OrderedDict:
 		"""Get available voices."""
 		voices = OrderedDict()
@@ -197,15 +194,11 @@ class SynthDriver(SynthDriver):
 			)
 		return voices
 
-	availableVoices = property(_getAvailableVoices)
-
 	def _get_variant(self) -> str:
 		return self._variant
 
 	def _set_variant(self, variant: str):
 		self._variant = variant
-
-	variant = property(_get_variant, _set_variant)
 
 	def _getAvailableVariants(self) -> OrderedDict:
 		variants = OrderedDict()
@@ -226,15 +219,11 @@ class SynthDriver(SynthDriver):
 
 		return variants
 
-	availableVariants = property(_getAvailableVariants)
-
 	def _get_rate(self) -> int:
 		return self._rate
 
 	def _set_rate(self, rate: int):
 		self._rate = max(0, min(100, rate))
-
-	rate = property(_get_rate, _set_rate)
 
 	def _get_pitch(self) -> int:
 		return self._pitch
@@ -242,15 +231,11 @@ class SynthDriver(SynthDriver):
 	def _set_pitch(self, pitch: int):
 		self._pitch = max(0, min(100, pitch))
 
-	pitch = property(_get_pitch, _set_pitch)
-
 	def _get_volume(self) -> int:
 		return self._volume
 
 	def _set_volume(self, volume: int):
 		self._volume = max(0, min(100, volume))
-
-	volume = property(_get_volume, _set_volume)
 
 	def _get_usePersianPhonemizer(self) -> bool:
 		return self._usePersianPhonemizer
@@ -261,8 +246,6 @@ class SynthDriver(SynthDriver):
 			if self._currentVoiceId in self._loadedVoices:
 				del self._loadedVoices[self._currentVoiceId]
 			self._currentVoice = self._loadVoice(self._currentVoiceId)
-
-	usePersianPhonemizer = property(_get_usePersianPhonemizer, _set_usePersianPhonemizer)
 
 	def _rateToLengthScale(self, rate: int) -> float:
 		# rate 0 -> length_scale 2.0 (slowest)
@@ -341,8 +324,7 @@ class SynthDriver(SynthDriver):
 		# Could implement by stopping/restarting
 		pass
 
-	@property
-	def language(self) -> Optional[str]:
+	def _get_language(self) -> Optional[str]:
 		if self._currentVoiceId:
 			voice_info = self._availableVoices.get(self._currentVoiceId, {})
 			return voice_info.get("language")

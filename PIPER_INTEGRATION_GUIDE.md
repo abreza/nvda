@@ -195,7 +195,7 @@ Your Piper integration files in NVDA:
 
 ```
 source/synthDrivers/
-├── piperDriver.py      # Main Piper synth driver
+├── piper.py            # Main Piper synth driver
 ├── _piper.py           # Background synthesis thread
 └── piper_voices/       # Voice files directory
     ├── fa_IR-mana-medium.onnx
