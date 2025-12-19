@@ -67,7 +67,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		self._voiceDir = Path(os.environ.get("PIPER_VOICE_DIR", DEFAULT_VOICE_DIR))
 		self._ezafeModelPath = os.environ.get("PIPER_EZAFE_MODEL_PATH")
 
-		self._availableVoices: Dict[str, Dict[str, Any]] = {}
+		self._voiceData: Dict[str, Dict[str, Any]] = {}
 		self._loadedVoices: Dict[str, Any] = {}
 		self._currentVoice: Optional[Any] = None
 		self._currentVoiceId: str = ""
@@ -85,8 +85,8 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		self._bgThread = BgThread(self)
 		self._bgThread.start()
 
-		if self._availableVoices:
-			self.voice = next(iter(self._availableVoices.keys()))
+		if self._voiceData:
+			self.voice = next(iter(self._voiceData.keys()))
 
 		log.info(f"Piper TTS initialized. Voice directory: {self._voiceDir}")
 
@@ -102,7 +102,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		log.info("Piper TTS terminated")
 
 	def _scanVoices(self):
-		self._availableVoices.clear()
+		self._voiceData.clear()
 
 		if not self._voiceDir.exists():
 			log.warning(f"Piper voice directory does not exist: {self._voiceDir}")
@@ -127,7 +127,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 				espeak_voice = config.get("espeak", {}).get("voice", "en")
 				lang = espeak_voice.split("-")[0] if "-" in espeak_voice else espeak_voice
 
-				self._availableVoices[voice_id] = {
+				self._voiceData[voice_id] = {
 					"name": voice_id,
 					"language": lang,
 					"path": str(onnx_path),
@@ -142,13 +142,13 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 			except Exception as e:
 				log.warning(f"Could not load voice config {config_path}: {e}")
 
-		log.info(f"Found {len(self._availableVoices)} Piper voice(s)")
+		log.info(f"Found {len(self._voiceData)} Piper voice(s)")
 
 	def _loadVoice(self, voice_id: str) -> Optional[Any]:
 		if voice_id in self._loadedVoices:
 			return self._loadedVoices[voice_id]
 
-		voice_info = self._availableVoices.get(voice_id)
+		voice_info = self._voiceData.get(voice_id)
 		if not voice_info:
 			log.error(f"Voice not found: {voice_id}")
 			return None
@@ -186,7 +186,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 	def _getAvailableVoices(self) -> OrderedDict:
 		"""Get available voices."""
 		voices = OrderedDict()
-		for voice_id, info in sorted(self._availableVoices.items()):
+		for voice_id, info in sorted(self._voiceData.items()):
 			voices[voice_id] = VoiceInfo(
 				voice_id,
 				info["name"],
@@ -206,7 +206,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		if not self._currentVoiceId:
 			return variants
 
-		voice_info = self._availableVoices.get(self._currentVoiceId, {})
+		voice_info = self._voiceData.get(self._currentVoiceId, {})
 		num_speakers = voice_info.get("num_speakers", 1)
 		speaker_id_map = voice_info.get("speaker_id_map", {})
 
@@ -326,6 +326,6 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 
 	def _get_language(self) -> Optional[str]:
 		if self._currentVoiceId:
-			voice_info = self._availableVoices.get(self._currentVoiceId, {})
+			voice_info = self._voiceData.get(self._currentVoiceId, {})
 			return voice_info.get("language")
 		return None

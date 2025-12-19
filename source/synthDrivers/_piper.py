@@ -7,11 +7,9 @@ from logHandler import log
 from synthDriverHandler import synthIndexReached, synthDoneSpeaking
 
 try:
-	from piper import PiperVoice
 	from piper.config import SynthesisConfig
 	PIPER_AVAILABLE = True
 except ImportError:
-	PiperVoice = None
 	SynthesisConfig = None
 	PIPER_AVAILABLE = False
 	log.warning("Piper TTS package not installed. Install with: pip install piper-tts")
@@ -32,8 +30,8 @@ def loadVoice(
 	if not PIPER_AVAILABLE:
 		log.error("Cannot load voice: Piper TTS package not available")
 		return None
-
 	try:
+		from piper import PiperVoice
 		voice = PiperVoice.load(
 			model_path=model_path,
 			config_path=config_path,
@@ -53,7 +51,10 @@ class BgThread(threading.Thread):
 		self._synth = synth
 		self._queue: queue.Queue = queue.Queue()
 		self._running = True
+		self._cancelled = False
 		self._player: Optional[nvwave.WavePlayer] = None
+		self._playerSampleRate: Optional[int] = None
+		self._playerLock = threading.Lock()
 
 	def run(self):
 		while self._running:
@@ -80,8 +81,6 @@ class BgThread(threading.Thread):
 				self._speak(data)
 			elif cmd == "index":
 				synthIndexReached.notify(synth=self._synth, index=data)
-			elif cmd == "cancel":
-				self._cancel()
 
 	def _speak(self, data: Dict[str, Any]):
 		text = data.get("text", "")
@@ -92,9 +91,12 @@ class BgThread(threading.Thread):
 		if voice is None:
 			return
 
-		if not PIPER_AVAILABLE or SynthesisConfig is None:
+		if not PIPER_AVAILABLE:
 			log.error("Cannot synthesize: Piper TTS package not available")
 			return
+
+		# Clear cancelled flag at start of new speech
+		self._cancelled = False
 
 		syn_config = SynthesisConfig(
 			speaker_id=data.get("speaker_id"),
@@ -105,45 +107,48 @@ class BgThread(threading.Thread):
 		)
 
 		try:
-			for audio_chunk in voice.synthesize(text, syn_config):
-				if not self._running:
+			for audio_chunk in voice.synthesize(text, syn_config, cancelled_callback=lambda: (not self._running) or self._cancelled):
+				if not self._running or self._cancelled:
 					break
 
-				if self._player is None or self._player._sampleRate != audio_chunk.sample_rate:
-					self._closePlayer()
-					self._player = nvwave.WavePlayer(
-						channels=audio_chunk.sample_channels,
-						samplesPerSec=audio_chunk.sample_rate,
-						bitsPerSample=audio_chunk.sample_width * 8,
-					)
+				with self._playerLock:
+					if self._cancelled:
+						break
 
-				self._player.feed(audio_chunk.audio_int16_bytes)
+					if self._player is None or self._playerSampleRate != audio_chunk.sample_rate:
+						self._closePlayerUnlocked()
+						self._player = nvwave.WavePlayer(
+							channels=audio_chunk.sample_channels,
+							samplesPerSec=audio_chunk.sample_rate,
+							bitsPerSample=audio_chunk.sample_width * 8,
+						)
+						self._playerSampleRate = audio_chunk.sample_rate
 
-			if self._player:
-				self._player.idle()
+					self._player.feed(audio_chunk.audio_int16_bytes)
+
+			with self._playerLock:
+				if self._player and not self._cancelled:
+					self._player.idle()
 
 		except Exception as e:
 			log.error(f"Piper synthesis failed: {e}")
 
-		synthDoneSpeaking.notify(synth=self._synth)
+		if not self._cancelled:
+			synthDoneSpeaking.notify(synth=self._synth)
 
-	def _cancel(self):
-		try:
-			while True:
-				self._queue.get_nowait()
-		except queue.Empty:
-			pass
-
-		if self._player:
-			self._player.stop()
-
-	def _closePlayer(self):
+	def _closePlayerUnlocked(self):
+		"""Close the player without acquiring the lock. Caller must hold _playerLock."""
 		if self._player:
 			try:
 				self._player.close()
 			except Exception:
 				pass
 			self._player = None
+			self._playerSampleRate = None
+
+	def _closePlayer(self):
+		with self._playerLock:
+			self._closePlayerUnlocked()
 
 	def queueSpeak(self, text: str, **kwargs):
 		self._queue.put(("speak", {"text": text, **kwargs}))
@@ -152,7 +157,31 @@ class BgThread(threading.Thread):
 		self._queue.put(("index", index))
 
 	def queueCancel(self):
-		self._queue.put(("cancel", None))
+		"""Immediately cancel all pending and current speech.
+
+		This method is designed to be called from any thread and provides
+		immediate cancellation by:
+		1. Setting the cancelled flag to stop synthesis loops
+		2. Clearing all pending items from the queue
+		3. Immediately stopping audio playback
+		"""
+		# Set flag first to stop any ongoing synthesis
+		self._cancelled = True
+
+		# Clear the queue of pending items
+		try:
+			while True:
+				self._queue.get_nowait()
+		except queue.Empty:
+			pass
+
+		# Immediately stop the audio player
+		with self._playerLock:
+			if self._player:
+				try:
+					self._player.stop()
+				except Exception:
+					pass
 
 	def stop(self):
 		self._running = False

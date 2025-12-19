@@ -51,6 +51,12 @@ dependencies = [
 	# local image caption
 	"onnxruntime==1.23.2",
 	"numpy==2.3.5",
+	"piper-tts",
+	"pandas>=2.0.0",
+	"pyarrow>=14.0.0",
+	"optimum[onnxruntime]>=1.16.0",
+	"transformers>=4.36.0",
+	"nltk==3.8.1",
 ]
 
 [project.urls]
@@ -303,6 +309,7 @@ package-dir = {"" = "source"}
 nvda-misc-deps = { workspace = true }
 configobj = { git = "https://github.com/DiffSK/configobj", rev = "9c8a0a80c767bf8a3d6493ed01df6c351bddca42" }
 nvda-mathcat = { workspace = true }
+piper-tts = { path = "piper_tts-1.3.1-cp39-abi3-win_amd64.whl" }
 
 [tool.uv.workspace]
 members = [

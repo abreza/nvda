@@ -30,6 +30,17 @@ const int TABLEHEADER_ROW = 0x2;
 
 using namespace std;
 
+// Helper to deduce the type required by get_accID regardless of architecture/header generation.
+// The interface definition for IAccID::get_accID varies between long* and __int64* 
+// depending on the target architecture and generated headers.
+template <typename T>
+struct GetAccIDArgType;
+
+template <typename Arg>
+struct GetAccIDArgType<HRESULT (STDMETHODCALLTYPE IAccID::*)(Arg*)> {
+	using type = Arg;
+};
+
 IAccessible* IAccessibleFromIdentifier(int docHandle, int ID) {
 	int res;
 	IAccessible* pacc=NULL;
@@ -55,13 +66,10 @@ long getAccID(IServiceProvider* servprov) {
 	}
 	LOG_DEBUG(L"IAccID at "<<paccID);
 
-	// IAccID::get_accID takes a longlong on 64 bit and a long on 32 bit.
-	// However, Acrobat will internally only place a 32 bit value into ID.
-	// Thus we call it with a LONG_PTR* and can safely static cast it to a long.
-	// LONG_PTR docs:
-	// A signed long type for pointer precision.
-	// Use when casting a pointer to a long to perform pointer arithmetic.
-	LONG_PTR ID = 0;  // LONG_PTR is 'long' on x86, 'long long' on x64.
+	// Deduce the variable type from the function signature to avoid type mismatch errors.
+	// This will result in 'long' on x86/some x64 headers, and '__int64' on ARM64/other x64 headers.
+	using AccIDType = typename GetAccIDArgType<decltype(&IAccID::get_accID)>::type;
+	AccIDType ID = 0;
 
 	LOG_DEBUG(L"Calling get_accID");
 	if ((res = paccID->get_accID(&ID)) != S_OK) {
@@ -72,7 +80,7 @@ long getAccID(IServiceProvider* servprov) {
 	LOG_DEBUG("Releasing IAccID");
 	paccID->Release();
 
-	return static_cast<long>(ID);  // Expected to contain a 32bit value, so it is safe to cast to a 32bit value.
+	return static_cast<long>(ID);
 }
 
 IPDDomNode* getPDDomNode(VARIANT& varChild, IServiceProvider* servprov) {
