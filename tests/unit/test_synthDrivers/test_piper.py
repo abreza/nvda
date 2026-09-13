@@ -57,7 +57,10 @@ class TestPiperWorker(unittest.TestCase):
 		self.workers: list[_piper.SpeechWorker] = []
 		self.releases: list[Event] = []
 		self.enterContext(
-			mock.patch.dict("sys.modules", {"piper.config": SimpleNamespace(SynthesisConfig=SimpleNamespace)})
+			mock.patch.dict(
+				"sys.modules",
+				{"piper.config": SimpleNamespace(SynthesisConfig=SimpleNamespace)},
+			),
 		)
 		self.enterContext(mock.patch.object(_piper.synthIndexReached, "notify", side_effect=self._onIndex))
 		self.enterContext(mock.patch.object(_piper.synthDoneSpeaking, "notify", side_effect=self._onDone))
@@ -101,7 +104,8 @@ class TestPiperWorker(unittest.TestCase):
 		self.assertTrue(self.done.wait(3))
 		relevant = [event for event in self.events if event[0] in {"audio", "index", "done", "idle"}]
 		self.assertEqual(
-			[("audio", b"first"), ("index", 7), ("audio", b"last"), ("idle",), ("done",)], relevant
+			[("audio", b"first"), ("index", 7), ("audio", b"last"), ("idle",), ("done",)],
+			relevant,
 		)
 		self.assertEqual("chosen-output-device", self.players[0].format["outputDevice"])
 
@@ -352,7 +356,8 @@ class TestPiperDriver(unittest.TestCase):
 
 	def test_rateMidpointUsesNormalVoiceSpeed(self) -> None:
 		self.assertEqual(
-			[2.0, 1.0, 0.5], [piper.SynthDriver._rateToLengthScale(rate) for rate in (0, 50, 100)]
+			[2.0, 1.0, 0.5],
+			[piper.SynthDriver._rateToLengthScale(rate) for rate in (0, 50, 100)],
 		)
 
 	def test_pauseDelegatesToPlayback(self) -> None:

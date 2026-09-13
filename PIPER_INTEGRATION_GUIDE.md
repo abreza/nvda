@@ -38,11 +38,11 @@ Keep those assets separate from source changes proposed upstream.
 
 ## Settings and speech behavior
 
-- **Voice** selects a local model. The initial selection prefers NVDA's language.
-- **Variant** selects a speaker within that model. Speaker choices refresh when the voice changes.
-- **Rate** uses the model's normal speed at 50, half speed at 0, and double speed at 100.
-- **Volume** adjusts synthesized audio from 0 to 100.
-- **Use enhanced Persian phonemizer** defaults to disabled and is saved with the voice settings.
+* **Voice** selects a local model. The initial selection prefers NVDA's language.
+* **Variant** selects a speaker within that model. Speaker choices refresh when the voice changes.
+* **Rate** uses the model's normal speed at 50, half speed at 0, and double speed at 100.
+* **Volume** adjusts synthesized audio from 0 to 100.
+* **Use enhanced Persian phonemizer** defaults to disabled and is saved with the voice settings.
   Enable it after configuring the Ezafe model; existing saved preferences are restored normally.
 
 The driver supports speech indices, timed breaks, inline rate and volume changes,
@@ -55,8 +55,8 @@ commands, so NVDA can apply its normal behavior for unsupported capabilities.
 
 ## Implementation
 
-- `source/synthDrivers/piper.py` handles NVDA settings, voice discovery, and speech commands.
-- `source/synthDrivers/_piper.py` performs synthesis and audio playback on a worker thread.
+* `source/synthDrivers/piper.py` handles NVDA settings, voice discovery, and speech commands.
+* `source/synthDrivers/_piper.py` performs synthesis and audio playback on a worker thread.
 
 Cancellation invalidates active and pending utterances and interrupts the audio player.
 Blocking audio feeds and drains do not hold the worker's state lock.
