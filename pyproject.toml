@@ -57,11 +57,13 @@ dependencies = [
 	# secret scanning for logging
 	"detect-secrets==1.5.0",
 	"regex==2026.7.19",
-	"piper-tts",
-	"pandas>=2.0.0",
-	"pyarrow>=14.0.0",
-	"optimum[onnxruntime]>=1.16.0",
-	"transformers>=4.36.0",
+	# Custom Piper wheel and its Persian phonemizer dependencies.
+	# The wheel does not declare the phonemizer's additional dependencies.
+	"piper-tts==1.3.1",
+	"pandas==2.3.3",
+	"pyarrow==22.0.0",
+	"optimum[onnxruntime]==2.0.0",
+	"transformers==4.55.4",
 	"nltk==3.8.1",
 ]
 

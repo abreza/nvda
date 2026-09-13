@@ -1,294 +1,80 @@
-# NVDA Build & Piper TTS Integration Guide
+# Piper synthesizer integration
 
-## ⚠️ Important: Windows Only
+This fork adds a Piper synthesizer with support for the custom Persian phonemizer.
+Use NVDA's [development environment instructions](projectDocs/dev/createDevEnvironment.md)
+and [build instructions](projectDocs/dev/buildingNVDA.md) for the required Python,
+Visual Studio, submodules, and build commands.
+Rebuild NVDA after updating its source or native submodules.
 
-**NVDA is a Windows-only screen reader.** You cannot build or run NVDA on macOS. You need a Windows 10/11 machine.
+## Dependencies and local voices
 
----
+The dependency manifest uses the custom
+`piper_tts-1.3.1-cp39-abi3-win_amd64.whl` in the repository root.
+This wheel extends Piper with `use_persian_phonemizer`, `ezafe_model_path`,
+and `cancelled_callback`; a stock PyPI wheel is not a drop-in replacement.
+Its additional Persian dependencies are declared and pinned in `pyproject.toml`
+because the wheel does not declare them itself.
+Install dependencies through NVDA's `uv` environment and keep `uv.lock` in sync.
 
-## Part 1: Prerequisites (Windows)
+Place each voice's `.onnx` model next to its matching `.onnx.json` configuration
+in `source/synthDrivers/piper_voices`, or set `PIPER_VOICE_DIR` to another directory.
+For example, `fa_IR-amir-medium.onnx` requires `fa_IR-amir-medium.onnx.json`.
+The driver reads these files locally and does not download models or create directories.
+It appears in NVDA's synthesizer list when the Piper package and a model/configuration pair exist.
+Invalid voice metadata is skipped; initialization fails if no voice can be loaded.
 
-### 1.1 Install Python 3.13
-
-Download and install Python 3.13.x (64-bit) from [python.org](https://www.python.org/downloads/).
-
-During installation:
-- ✅ Add Python to PATH
-- ✅ Install pip
-
-### 1.2 Install uv (Package Manager)
-
-Open PowerShell as Administrator and run:
-
-```powershell
-irm https://astral.sh/uv/install.ps1 | iex
-```
-
-Or with pip:
-```powershell
-pip install uv
-```
-
-### 1.3 Install Visual Studio 2022
-
-Download [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) or [Community Edition](https://aka.ms/vs/17/release/vs_Community.exe).
-
-During installation, select:
-- **Desktop development with C++**
-  - Include "C++ Clang tools for Windows"
-- Individual Components:
-  - Windows 11 SDK (10.0.26100.x)
-  - MSVC v143 - VS 2022 C++ ARM64/ARM64EC build tools
-  - MSVC v143 - VS 2022 C++ x64/x86 build tools
-  - C++ ATL for v143 build tools (x86 & x64)
-  - C++ ATL for v143 build tools (ARM64/ARM64EC)
-
-**Quick method:** Import the `.vsconfig` file from the NVDA repository:
-```powershell
-vs_installer.exe --config "C:\path\to\nvda-master\.vsconfig"
-```
-
-### 1.4 Install Git
-
-Download from [git-scm.com](https://git-scm.com/download/win).
-
----
-
-## Part 2: Clone NVDA Repository
+For enhanced Persian synthesis, configure the Ezafe model path before starting NVDA:
 
 ```powershell
-# Clone with submodules
-git clone --recursive https://github.com/nvaccess/nvda.git
-cd nvda
-
-# Or if already cloned without --recursive:
-git submodule update --init --recursive
-```
-
----
-
-## Part 3: Build NVDA
-
-### 3.1 Build the Project
-
-Open a **Developer Command Prompt for VS 2022** (or regular PowerShell) and navigate to the NVDA directory:
-
-```powershell
-cd C:\path\to\nvda-master
-
-# Build NVDA (this creates the virtual environment and builds everything)
-.\scons.bat
-```
-
-This will:
-1. Create a Python virtual environment
-2. Install all dependencies via uv
-3. Build nvdaHelper (C++ components)
-4. Compile all resources
-
-### 3.2 Run NVDA from Source
-
-```powershell
+$env:PIPER_VOICE_DIR = 'C:\Piper\voices'
+$env:PIPER_EZAFE_MODEL_PATH = 'C:\Piper\ezafe_model_quantized'
 .\runnvda.bat
 ```
 
-Or with debug options:
-```powershell
-.\runnvda.bat --debug-logging
-```
+Select **Piper Neural TTS** in NVDA's synthesizer dialog.
+Voice models, training data, and the custom wheel are local development assets;
+NVDA's source-contribution checks impose a size limit on added files.
+Keep those assets separate from source changes proposed upstream.
 
----
+## Settings and speech behavior
 
-## Part 4: Install Your Custom Piper TTS Package
+- **Voice** selects a local model. The initial selection prefers NVDA's language.
+- **Variant** selects a speaker within that model. Speaker choices refresh when the voice changes.
+- **Rate** uses the model's normal speed at 50, half speed at 0, and double speed at 100.
+- **Volume** adjusts synthesized audio from 0 to 100.
+- **Use enhanced Persian phonemizer** defaults to disabled and is saved with the voice settings.
+  Enable it after configuring the Ezafe model; existing saved preferences are restored normally.
 
-### 4.1 Build the Piper Wheel (on your development machine)
+The driver supports speech indices, timed breaks, inline rate and volume changes,
+cancellation, and pause/resume. It preserves the voice, speaker, and settings associated
+with queued speech. Completion is reported after pending audio drains.
 
-First, build your custom Piper package with Persian phonemizer:
+Piper's synthesis configuration does not provide pitch control.
+The driver does not advertise pitch, character-mode, or automatic language-switching
+commands, so NVDA can apply its normal behavior for unsupported capabilities.
 
-```powershell
-# Navigate to your Piper project directory
-cd C:\path\to\piper-project
+## Implementation
 
-# Create virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+- `source/synthDrivers/piper.py` handles NVDA settings, voice discovery, and speech commands.
+- `source/synthDrivers/_piper.py` performs synthesis and audio playback on a worker thread.
 
-# Install build dependencies
-pip install scikit-build setuptools wheel cmake ninja
+Cancellation invalidates active and pending utterances and interrupts the audio player.
+Blocking audio feeds and drains do not hold the worker's state lock.
+Pausing preserves queued speech; termination cancels speech and joins the worker before
+releasing voices and unregistering the driver's settings callbacks.
 
-# Build the wheel
-python setup.py bdist_wheel
-```
+## Validation
 
-The wheel will be created in `dist/piper_tts-1.3.1-cp39-abi3-win_amd64.whl` (or similar).
-
-### 4.2 Install Piper into NVDA's Virtual Environment
-
-```powershell
-# Navigate to NVDA directory
-cd C:\path\to\nvda-master
-
-# Activate NVDA's virtual environment
-.\.venv\Scripts\Activate.ps1
-
-# Install your custom Piper wheel
-pip install C:\path\to\piper-project\dist\piper_tts-1.3.1-cp39-abi3-win_amd64.whl
-
-# Install additional dependencies for Persian phonemizer
-pip install hazm pandas pyarrow transformers optimum[onnxruntime]
-```
-
-### 4.3 Set Up Voice Directory
-
-Create the voice directory and copy your Piper voices:
+In a configured and rebuilt NVDA environment, run the focused regression tests:
 
 ```powershell
-# Create voice directory
-mkdir "C:\path\to\nvda-master\source\synthDrivers\piper_voices"
-
-# Copy your ONNX voice files
-# Each voice needs: voice.onnx and voice.onnx.json
-copy "C:\path\to\fa_IR-mana-medium.onnx" "C:\path\to\nvda-master\source\synthDrivers\piper_voices\"
-copy "C:\path\to\fa_IR-mana-medium.onnx.json" "C:\path\to\nvda-master\source\synthDrivers\piper_voices\"
+.\rununittests.bat -k test_piper
 ```
 
-### 4.4 Set Environment Variables for Persian Phonemizer
+The tests mock inference and audio playback and cover cancellation races, pause/resume,
+notification order, timed breaks, inline settings, and voice metadata.
+Also run NVDA's normal lint checks and `uv lock --check`.
 
-Set these environment variables before running NVDA:
-
-```powershell
-# Set voice directory
-$env:PIPER_VOICE_DIR = "C:\path\to\nvda-master\source\synthDrivers\piper_voices"
-
-# Set Ezafe model path (for Persian phonemizer)
-$env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
-
-# Set Homograph dictionary path
-$env:HOMOGRAPH_DICT_PATH = "C:\path\to\homograph_dictionary.parquet"
-```
-
-Or add them permanently via System Properties → Environment Variables.
-
----
-
-## Part 5: Configure NVDA to Use Piper
-
-### 5.1 Run NVDA
-
-```powershell
-.\runnvda.bat
-```
-
-### 5.2 Select Piper as Synthesizer
-
-1. Press **NVDA+Ctrl+S** to open Settings
-2. Go to **Speech** category
-3. Change **Synthesizer** to "Piper TTS"
-4. Select your voice from the **Voice** dropdown
-5. Click **OK**
-
----
-
-## Part 6: Project Structure
-
-Your Piper integration files in NVDA:
-
-```
-source/synthDrivers/
-├── piper.py            # Main Piper synth driver
-├── _piper.py           # Background synthesis thread
-└── piper_voices/       # Voice files directory
-    ├── fa_IR-mana-medium.onnx
-    ├── fa_IR-mana-medium.onnx.json
-    └── ... (other voices)
-```
-
----
-
-## Part 7: Troubleshooting
-
-### Issue: "Piper TTS package not installed"
-
-```powershell
-# Activate NVDA venv and reinstall
-.\.venv\Scripts\Activate.ps1
-pip install --force-reinstall C:\path\to\piper_tts-*.whl
-```
-
-### Issue: Persian phonemizer not working
-
-Ensure the Ezafe model is properly installed:
-
-```powershell
-# Download and extract the Ezafe model
-# Set the environment variable
-$env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
-```
-
-### Issue: No voices found
-
-Check that:
-1. Voice files are in the correct directory
-2. Both `.onnx` and `.onnx.json` files exist
-3. `PIPER_VOICE_DIR` environment variable is set correctly
-
-### Issue: Build errors
-
-```powershell
-# Clean and rebuild
-.\scons.bat -c
-.\scons.bat
-```
-
-### View NVDA logs
-
-```powershell
-# Logs are in:
-%TEMP%\nvda-*.log
-# Or with debug logging:
-.\runnvda.bat --debug-logging -f %TEMP%\nvda-debug.log
-```
-
----
-
-## Part 8: Creating an NVDA Installer with Piper
-
-To create a distributable NVDA installer:
-
-```powershell
-# Build the launcher/installer
-.\scons.bat launcher
-
-# The installer will be in the output directory
-dir .\output\
-```
-
----
-
-## Quick Start Commands Summary
-
-```powershell
-# 1. Build NVDA
-cd C:\path\to\nvda-master
-.\scons.bat
-
-# 2. Install Piper
-.\.venv\Scripts\Activate.ps1
-pip install C:\path\to\piper_tts-*.whl
-pip install hazm pandas pyarrow transformers optimum[onnxruntime]
-
-# 3. Set environment variables
-$env:PIPER_VOICE_DIR = "C:\path\to\nvda-master\source\synthDrivers\piper_voices"
-$env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
-
-# 4. Run NVDA
-.\runnvda.bat
-```
-
----
-
-## Additional Resources
-
-- [NVDA Developer Guide](https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/createDevEnvironment.md)
-- [Piper TTS Documentation](https://github.com/rhasspy/piper)
-- [NVDA Add-on Development](https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/addonDevelopment.md)
+For a runtime check, select a local voice, read a long passage, interrupt it with Control,
+and pause/resume it with Shift. Check voice/speaker changes, inline rate and volume,
+and Persian synthesis with the configured Ezafe model.

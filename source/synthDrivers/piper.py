@@ -1,331 +1,301 @@
+# A part of NonVisual Desktop Access (NVDA)
+# This file is covered by the GNU General Public License.
+# See the file COPYING for more details.
+
+"""NVDA synthesizer driver for the custom Piper wheel with Persian support."""
+
+from __future__ import annotations
+
+import json
 import os
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import TYPE_CHECKING
 
-from autoSettingsUtils.driverSetting import NumericDriverSetting, BooleanDriverSetting
+import config
+import languageHandler
+from autoSettingsUtils.driverSetting import BooleanDriverSetting
 from autoSettingsUtils.utils import StringParameterInfo
 from logHandler import log
-from speech.commands import (
-	IndexCommand,
-	CharacterModeCommand,
-	LangChangeCommand,
-	BreakCommand,
-	PitchCommand,
-	RateCommand,
-	VolumeCommand,
-)
-import synthDriverHandler
-from synthDriverHandler import VoiceInfo, synthIndexReached, synthDoneSpeaking
-from ._piper import BgThread, isPiperAvailable, loadVoice
+from speech.commands import BreakCommand, IndexCommand, RateCommand, VolumeCommand
+from speech.types import SpeechSequence
+from synthDriverHandler import SynthDriver as BaseSynthDriver
+from synthDriverHandler import VoiceInfo, synthDoneSpeaking, synthIndexReached
+
+from . import _piper
+
+if TYPE_CHECKING:
+	from piper import PiperVoice
 
 
-DEFAULT_VOICE_DIR = os.path.join(os.path.dirname(__file__), "piper_voices")
+DEFAULT_VOICE_DIR = Path(__file__).with_name("piper_voices")
 
 
-class SynthDriver(synthDriverHandler.SynthDriver):
+@dataclass(frozen=True)
+class _Voice:
+	modelPath: Path
+	configPath: Path
+	language: str | None
+	sampleRate: int
+	numSpeakers: int
+	speakers: dict[str, int]
+
+
+def _getVoiceDirectory() -> Path:
+	return Path(os.environ.get("PIPER_VOICE_DIR") or DEFAULT_VOICE_DIR)
+
+
+class SynthDriver(BaseSynthDriver):
+	"""Expose local Piper voices through NVDA's standard synthesizer settings."""
+
 	name = "piper"
 	# Translators: Description for a speech synthesizer.
 	description = _("Piper Neural TTS")
-
 	supportedSettings = (
-		synthDriverHandler.SynthDriver.VoiceSetting(),
-		synthDriverHandler.SynthDriver.VariantSetting(),
-		synthDriverHandler.SynthDriver.RateSetting(),
-		synthDriverHandler.SynthDriver.PitchSetting(),
-		synthDriverHandler.SynthDriver.VolumeSetting(),
+		BaseSynthDriver.VoiceSetting(),
+		BaseSynthDriver.VariantSetting(),
+		BaseSynthDriver.RateSetting(),
+		BaseSynthDriver.VolumeSetting(),
 		BooleanDriverSetting(
 			"usePersianPhonemizer",
-			# Translators: This is the label for a setting in voice settings dialog.
+			# Translators: A voice setting enabling the custom Piper Persian phonemizer.
 			_("Use enhanced &Persian phonemizer"),
 			defaultVal=False,
 		),
 	)
-
-	supportedCommands = {
-		IndexCommand,
-		CharacterModeCommand,
-		LangChangeCommand,
-		BreakCommand,
-		PitchCommand,
-		RateCommand,
-		VolumeCommand,
-	}
-
-	supportedNotifications = {synthIndexReached, synthDoneSpeaking}
+	supportedCommands = frozenset({IndexCommand, BreakCommand, RateCommand, VolumeCommand})
+	supportedNotifications = frozenset({synthIndexReached, synthDoneSpeaking})
 
 	@classmethod
 	def check(cls) -> bool:
-		return isPiperAvailable()
+		"""Offer Piper only when its package and at least one local voice are present."""
+		if not _piper.isPiperAvailable():
+			return False
+		return any(model.with_suffix(".onnx.json").is_file() for model in _getVoiceDirectory().glob("*.onnx"))
 
-	def __init__(self):
-		super().__init__()
-
-		if not isPiperAvailable():
-			raise RuntimeError("Piper TTS package not available")
-
-		self._voiceDir = Path(os.environ.get("PIPER_VOICE_DIR", DEFAULT_VOICE_DIR))
-		self._ezafeModelPath = os.environ.get("PIPER_EZAFE_MODEL_PATH")
-
-		self._voiceData: Dict[str, Dict[str, Any]] = {}
-		self._loadedVoices: Dict[str, Any] = {}
-		self._currentVoice: Optional[Any] = None
-		self._currentVoiceId: str = ""
-
+	def __init__(self) -> None:
+		self._voiceDir = _getVoiceDirectory()
+		self._ezafeModelPath = os.environ.get("PIPER_EZAFE_MODEL_PATH") or None
+		self._voiceData: dict[str, _Voice] = {}
+		self._loadedVoices: dict[tuple[str, bool], PiperVoice] = {}
+		self._currentVoice: PiperVoice | None = None
+		self._currentVoiceId = ""
 		self._rate = 50
-		self._pitch = 50
 		self._volume = 100
 		self._variant = "0"
-		self._usePersianPhonemizer = True
-
-		self._bgThread: Optional[BgThread] = None
-
+		self._usePersianPhonemizer = False
+		self._worker: _piper.SpeechWorker | None = None
 		self._scanVoices()
+		if not self._voiceData:
+			raise RuntimeError("No valid Piper voices found")
+		self._selectInitialVoice()
+		# Register settings only after initialization has succeeded.
+		super().__init__()
+		self._worker = _piper.SpeechWorker(self, config.conf["audio"]["outputDevice"])
+		self._worker.start()
 
-		self._bgThread = BgThread(self)
-		self._bgThread.start()
-
-		if self._voiceData:
-			self.voice = next(iter(self._voiceData.keys()))
-
-		log.info(f"Piper TTS initialized. Voice directory: {self._voiceDir}")
-
-	def terminate(self):
-		if self._bgThread:
-			self._bgThread.stop()
-			self._bgThread.join(timeout=2.0)
-			self._bgThread = None
-
-		self._loadedVoices.clear()
-		self._currentVoice = None
-
-		log.info("Piper TTS terminated")
-
-	def _scanVoices(self):
-		self._voiceData.clear()
-
-		if not self._voiceDir.exists():
-			log.warning(f"Piper voice directory does not exist: {self._voiceDir}")
-			try:
-				self._voiceDir.mkdir(parents=True, exist_ok=True)
-			except Exception as e:
-				log.error(f"Could not create voice directory: {e}")
-			return
-
-		import json
-
-		for onnx_path in self._voiceDir.glob("*.onnx"):
-			config_path = Path(f"{onnx_path}.json")
-			if not config_path.exists():
-				continue
-
-			voice_id = onnx_path.stem
-			try:
-				with open(config_path, "r", encoding="utf-8") as f:
-					config = json.load(f)
-
-				espeak_voice = config.get("espeak", {}).get("voice", "en")
-				lang = espeak_voice.split("-")[0] if "-" in espeak_voice else espeak_voice
-
-				self._voiceData[voice_id] = {
-					"name": voice_id,
-					"language": lang,
-					"path": str(onnx_path),
-					"config_path": str(config_path),
-					"sample_rate": config.get("audio", {}).get("sample_rate", 22050),
-					"num_speakers": config.get("num_speakers", 1),
-					"speaker_id_map": config.get("speaker_id_map", {}),
-					"espeak_voice": espeak_voice,
-				}
-				log.debug(f"Found Piper voice: {voice_id} ({lang})")
-
-			except Exception as e:
-				log.warning(f"Could not load voice config {config_path}: {e}")
-
-		log.info(f"Found {len(self._voiceData)} Piper voice(s)")
-
-	def _loadVoice(self, voice_id: str) -> Optional[Any]:
-		if voice_id in self._loadedVoices:
-			return self._loadedVoices[voice_id]
-
-		voice_info = self._voiceData.get(voice_id)
-		if not voice_info:
-			log.error(f"Voice not found: {voice_id}")
-			return None
-
+	def terminate(self) -> None:
+		"""Stop all work before releasing voices and saving the driver's settings."""
 		try:
-			voice = loadVoice(
-				model_path=voice_info["path"],
-				config_path=voice_info["config_path"],
-				use_cuda=False,
-				use_persian_phonemizer=self._usePersianPhonemizer,
-				ezafe_model_path=self._ezafeModelPath,
-			)
-			if voice:
-				self._loadedVoices[voice_id] = voice
-				log.info(f"Loaded Piper voice: {voice_id}")
-			return voice
+			if self._worker is not None:
+				try:
+					self._worker.stop()
+				finally:
+					self._worker.join()
+				self._worker = None
+		finally:
+			try:
+				super().terminate()
+			finally:
+				self._loadedVoices.clear()
+				self._currentVoice = None
 
-		except Exception as e:
-			log.error(f"Failed to load voice {voice_id}: {e}")
-			return None
+	def _scanVoices(self) -> None:
+		"""Read local voice metadata without creating directories or downloading files."""
+		for modelPath in sorted(self._voiceDir.glob("*.onnx")):
+			configPath = modelPath.with_suffix(".onnx.json")
+			if not configPath.is_file():
+				continue
+			try:
+				metadata = json.loads(configPath.read_text(encoding="utf-8-sig"))
+				sampleRate = metadata["audio"]["sample_rate"]
+				numSpeakers = metadata.get("num_speakers", 1)
+				speakers = metadata.get("speaker_id_map", {})
+				if not isinstance(sampleRate, int) or sampleRate <= 0:
+					raise ValueError("Invalid sample rate")
+				if not isinstance(numSpeakers, int) or numSpeakers <= 0:
+					raise ValueError("Invalid speaker count")
+				if not isinstance(speakers, dict) or any(
+					not isinstance(name, str) or not isinstance(sid, int) or not 0 <= sid < numSpeakers
+					for name, sid in speakers.items()
+				):
+					raise ValueError("Invalid speaker map")
+				language = metadata.get("language", {}).get("code") or metadata.get("espeak", {}).get("voice")
+				if language is not None:
+					language = languageHandler.normalizeLanguage(language)
+				self._voiceData[modelPath.stem] = _Voice(
+					modelPath,
+					configPath,
+					language,
+					sampleRate,
+					numSpeakers,
+					speakers,
+				)
+			except (OSError, ValueError, KeyError, TypeError, AttributeError):
+				log.debugWarning(f"Invalid Piper voice configuration: {configPath}", exc_info=True)
+
+	def _selectInitialVoice(self) -> None:
+		language = languageHandler.getLanguage()
+		voiceIds = sorted(
+			self._voiceData,
+			key=lambda voiceId: (
+				self._voiceData[voiceId].language != language,
+				(self._voiceData[voiceId].language or "").split("_")[0] != language.split("_")[0],
+			),
+		)
+		for voiceId in voiceIds:
+			try:
+				self._set_voice(voiceId)
+				return
+			except Exception:
+				log.exception(f"Unable to load Piper voice: {voiceId}")
+		raise RuntimeError("Unable to load any Piper voice")
+
+	def _loadVoice(self, voiceId: str, usePersianPhonemizer: bool) -> PiperVoice:
+		key = (voiceId, usePersianPhonemizer)
+		if key not in self._loadedVoices:
+			voice = self._voiceData[voiceId]
+			self._loadedVoices[key] = _piper.loadVoice(
+				modelPath=voice.modelPath,
+				configPath=voice.configPath,
+				usePersianPhonemizer=usePersianPhonemizer,
+				ezafeModelPath=self._ezafeModelPath,
+			)
+		return self._loadedVoices[key]
 
 	def _get_voice(self) -> str:
 		return self._currentVoiceId
 
-	def _set_voice(self, voice_id: str):
-		if voice_id == self._currentVoiceId:
+	def _set_voice(self, voiceId: str) -> None:
+		if voiceId not in self._voiceData:
+			raise ValueError(f"Unknown Piper voice: {voiceId}")
+		if voiceId == self._currentVoiceId:
 			return
+		voice = self._loadVoice(voiceId, self._usePersianPhonemizer)
+		self._currentVoice = voice
+		self._currentVoiceId = voiceId
+		self.__dict__.pop("_availableVariants", None)
+		self._variant = next(iter(self.availableVariants))
 
-		voice = self._loadVoice(voice_id)
-		if voice:
-			self._currentVoice = voice
-			self._currentVoiceId = voice_id
-			self._variant = "0"
-
-	def _getAvailableVoices(self) -> OrderedDict:
-		"""Get available voices."""
-		voices = OrderedDict()
-		for voice_id, info in sorted(self._voiceData.items()):
-			voices[voice_id] = VoiceInfo(
-				voice_id,
-				info["name"],
-				info["language"],
-			)
-		return voices
+	def _getAvailableVoices(self) -> OrderedDict[str, VoiceInfo]:
+		return OrderedDict(
+			(voiceId, VoiceInfo(voiceId, voiceId, info.language)) for voiceId, info in self._voiceData.items()
+		)
 
 	def _get_variant(self) -> str:
 		return self._variant
 
-	def _set_variant(self, variant: str):
+	def _set_variant(self, variant: str) -> None:
+		if variant not in self.availableVariants:
+			raise ValueError(f"Unknown Piper speaker: {variant}")
 		self._variant = variant
 
-	def _getAvailableVariants(self) -> OrderedDict:
-		variants = OrderedDict()
-
-		if not self._currentVoiceId:
-			return variants
-
-		voice_info = self._voiceData.get(self._currentVoiceId, {})
-		num_speakers = voice_info.get("num_speakers", 1)
-		speaker_id_map = voice_info.get("speaker_id_map", {})
-
-		if speaker_id_map:
-			for name, sid in sorted(speaker_id_map.items(), key=lambda x: x[1]):
-				variants[str(sid)] = StringParameterInfo(str(sid), name)
-		else:
-			for i in range(num_speakers):
-				variants[str(i)] = StringParameterInfo(str(i), f"Speaker {i}")
-
-		return variants
+	def _getAvailableVariants(self) -> OrderedDict[str, StringParameterInfo]:
+		voice = self._voiceData[self._currentVoiceId]
+		if voice.speakers:
+			return OrderedDict(
+				(str(speakerId), StringParameterInfo(str(speakerId), name))
+				for name, speakerId in sorted(voice.speakers.items(), key=lambda item: item[1])
+			)
+		return OrderedDict(
+			(
+				str(speakerId),
+				StringParameterInfo(
+					str(speakerId),
+					# Translators: The numbered speaker in a Piper voice with no named speakers.
+					_("Speaker {number}").format(number=speakerId + 1),
+				),
+			)
+			for speakerId in range(voice.numSpeakers)
+		)
 
 	def _get_rate(self) -> int:
 		return self._rate
 
-	def _set_rate(self, rate: int):
+	def _set_rate(self, rate: int) -> None:
 		self._rate = max(0, min(100, rate))
-
-	def _get_pitch(self) -> int:
-		return self._pitch
-
-	def _set_pitch(self, pitch: int):
-		self._pitch = max(0, min(100, pitch))
 
 	def _get_volume(self) -> int:
 		return self._volume
 
-	def _set_volume(self, volume: int):
+	def _set_volume(self, volume: int) -> None:
 		self._volume = max(0, min(100, volume))
 
 	def _get_usePersianPhonemizer(self) -> bool:
 		return self._usePersianPhonemizer
 
-	def _set_usePersianPhonemizer(self, value: bool):
-		self._usePersianPhonemizer = value
-		if self._currentVoiceId:
-			if self._currentVoiceId in self._loadedVoices:
-				del self._loadedVoices[self._currentVoiceId]
-			self._currentVoice = self._loadVoice(self._currentVoiceId)
-
-	def _rateToLengthScale(self, rate: int) -> float:
-		# rate 0 -> length_scale 2.0 (slowest)
-		# rate 50 -> length_scale 1.0 (normal)
-		# rate 100 -> length_scale 0.5 (fastest)
-		return 2.0 - (rate / 100.0 * 1.5)
-
-	def _volumeToFloat(self, volume: int) -> float:
-		return volume / 100.0
-
-	def speak(self, speechSequence: list):
-		if not self._bgThread or not self._currentVoice:
+	def _set_usePersianPhonemizer(self, value: bool) -> None:
+		if value == self._usePersianPhonemizer:
 			return
+		voice = self._loadVoice(self._currentVoiceId, value)
+		self._usePersianPhonemizer = value
+		self._currentVoice = voice
 
-		textParts = []
-		currentRate = self._rate
-		currentVolume = self._volume
+	@staticmethod
+	def _rateToLengthScale(rate: int) -> float:
+		"""Map rate 0/50/100 to half/normal/double the voice's default speed."""
+		return 2.0 ** ((50 - rate) / 50)
+
+	def speak(self, speechSequence: SpeechSequence) -> None:
+		"""Queue text and commands with a consistent snapshot of the current voice."""
+		if self._worker is None or self._currentVoice is None:
+			return
+		voice = self._currentVoice
+		voiceInfo = self._voiceData[self._currentVoiceId]
+		speakerId = int(self._variant) if voiceInfo.numSpeakers > 1 else None
+		items: list[_piper.SpeechItem] = []
+		textParts: list[str] = []
+		rate, volume = self._rate, self._volume
+
+		def flushText() -> None:
+			text = "".join(textParts)
+			textParts.clear()
+			if text.strip():
+				items.append(
+					_piper.Speech(
+						text,
+						voice,
+						speakerId,
+						voice.config.length_scale * self._rateToLengthScale(rate),
+						volume / 100.0,
+					),
+				)
 
 		for item in speechSequence:
 			if isinstance(item, str):
 				textParts.append(item)
-
-			elif isinstance(item, IndexCommand):
-				if textParts:
-					text = "".join(textParts)
-					if text.strip():
-						self._bgThread.queueSpeak(
-							text,
-							speaker_id=int(self._variant) if self._variant.isdigit() else 0,
-							length_scale=self._rateToLengthScale(currentRate),
-							volume=self._volumeToFloat(currentVolume),
-						)
-					textParts.clear()
-				self._bgThread.queueIndex(item.index)
-
-			elif isinstance(item, RateCommand):
-				if item.isDefault:
-					currentRate = self._rate
-				else:
-					currentRate = max(0, min(100, item.newValue))
-
-			elif isinstance(item, VolumeCommand):
-				if item.isDefault:
-					currentVolume = self._volume
-				else:
-					currentVolume = max(0, min(100, item.newValue))
-
+				continue
+			flushText()
+			if isinstance(item, IndexCommand):
+				items.append(_piper.Index(item.index))
 			elif isinstance(item, BreakCommand):
-				# Add silence marker
-				textParts.append(" ")
+				items.append(_piper.Silence(max(0, item.time), voiceInfo.sampleRate))
+			elif isinstance(item, RateCommand):
+				rate = self._rate if item.isDefault else max(0, min(100, item.newValue))
+			elif isinstance(item, VolumeCommand):
+				volume = self._volume if item.isDefault else max(0, min(100, item.newValue))
+			else:
+				log.debugWarning(f"Unsupported Piper speech command: {type(item).__name__}")
+		flushText()
+		self._worker.speak(items)
 
-			elif isinstance(item, CharacterModeCommand):
-				# Character mode - spell out letters
-				pass
+	def cancel(self) -> None:
+		"""Silence active speech and discard pending utterances."""
+		if self._worker is not None:
+			self._worker.cancel()
 
-			elif isinstance(item, LangChangeCommand):
-				# Language change - Piper handles this per-voice
-				pass
-
-		if textParts:
-			text = "".join(textParts)
-			if text.strip():
-				self._bgThread.queueSpeak(
-					text,
-					speaker_id=int(self._variant) if self._variant.isdigit() else 0,
-					length_scale=self._rateToLengthScale(currentRate),
-					volume=self._volumeToFloat(currentVolume),
-				)
-
-	def cancel(self):
-		if self._bgThread:
-			self._bgThread.queueCancel()
-
-	def pause(self, switch: bool):
-		# Piper doesn't support pause natively
-		# Could implement by stopping/restarting
-		pass
-
-	def _get_language(self) -> Optional[str]:
-		if self._currentVoiceId:
-			voice_info = self._voiceData.get(self._currentVoiceId, {})
-			return voice_info.get("language")
-		return None
+	def pause(self, switch: bool) -> None:
+		"""Pause or resume without losing queued speech."""
+		if self._worker is not None:
+			self._worker.pause(switch)
