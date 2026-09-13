@@ -57,6 +57,9 @@ dependencies = [
 	# secret scanning for logging
 	"detect-secrets==1.5.0",
 	"regex==2026.7.19",
+	# Transport for the independently running Sonata speech service.
+	"grpcio==1.78.0",
+	"protobuf==6.33.1",
 ]
 
 [project.urls]
@@ -106,6 +109,7 @@ exclude = [
 ]
 
 [tool.ruff.format]
+exclude = ["**/sonata_grpc_pb2.py"]
 indent-style = "tab"
 line-ending = "lf"
 
@@ -129,6 +133,7 @@ extend-unsafe-fixes = [
 logger-objects = ["logHandler.log"]
 
 [tool.ruff.lint.per-file-ignores]
+"**/sonata_grpc_pb2.py" = ["ALL"]
 # sconscripts contains many inbuilt functions not recognised by the lint,
 # so ignore F821.
 "sconstruct" = ["F821"]

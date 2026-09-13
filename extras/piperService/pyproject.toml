@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sonata-piper-service"
+version = "0.1.0"
+description = "Standalone Piper service implementing the Sonata gRPC interface"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-2.0-or-later"
+license-files = ["COPYING.txt", "sonata_piper/LICENSE.sonata"]
+dependencies = ["grpcio>=1.78,<2", "protobuf>=6.33.1,<7"]
+
+[project.optional-dependencies]
+persian = [
+	"pandas==2.3.3",
+	"pyarrow==22.0.0",
+	"optimum[onnxruntime]==2.0.0",
+	"transformers==4.55.4",
+	"nltk==3.8.1",
+]
+
+[project.scripts]
+sonata-piper = "sonata_piper.server:main"
+
+[tool.setuptools.packages.find]
+include = ["sonata_piper*"]
+
+[tool.setuptools.package-data]
+sonata_piper = ["LICENSE.sonata"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.format]
+exclude = ["**/sonata_grpc_pb2.py"]
+indent-style = "tab"

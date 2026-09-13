@@ -322,6 +322,12 @@ freeze(
 			"brailleDisplayDrivers.dotPad",
 			"brailleInput",
 			"synthDrivers",
+			"synthDrivers._sonata",
+			# gRPC and protobuf import parts of their native runtime dynamically.
+			"grpc",
+			"grpc._cython",
+			"google.protobuf",
+			"google._upb",
 			"visionEnhancementProviders",
 			# Required for markdown, markdown implicitly imports this so it isn't picked up
 			"html.parser",
@@ -353,6 +359,7 @@ freeze(
 	data_files=[
 		(".", glob("*.dll") + glob("*.manifest") + ["builtin.dic"]),
 		("documentation", ["../copying.txt"]),
+		("documentation/sonata", ["synthDrivers/_sonata/LICENSE.sonata"]),
 		("lib/%s/x86" % version, glob("lib/x86/*.dll") + glob("lib/x86/*.exe")),  # noqa: UP031
 		("lib/%s/x64" % version, glob("lib/x64/*.dll") + glob("lib/x64/*.exe")),  # noqa: UP031
 		("lib/%s/arm64" % version, glob("lib/arm64/*.dll") + glob("lib/arm64/*.exe")),  # noqa: UP031
