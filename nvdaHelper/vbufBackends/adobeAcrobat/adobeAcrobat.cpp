@@ -31,7 +31,7 @@ const int TABLEHEADER_ROW = 0x2;
 using namespace std;
 
 // Helper to deduce the type required by get_accID regardless of architecture/header generation.
-// The interface definition for IAccID::get_accID varies between long* and __int64* 
+// The interface definition for IAccID::get_accID varies between long* and __int64*
 // depending on the target architecture and generated headers.
 template <typename T>
 struct GetAccIDArgType;
