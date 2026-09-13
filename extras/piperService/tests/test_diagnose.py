@@ -4,10 +4,10 @@
 
 """Numerical diagnostic checks without voice models or neural inference."""
 
-from pathlib import Path
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 
 try:
 	import numpy as np
@@ -76,7 +76,9 @@ class AcousticMetricsTests(unittest.TestCase):
 						audio = audioResult[0] if isinstance(audioResult, tuple) else audioResult
 						normalized = audio / np.max(np.abs(audio))
 						yield SimpleNamespace(
-							phonemes=phonemes, phoneme_ids=ids, audio_float_array=normalized
+							phonemes=phonemes,
+							phoneme_ids=ids,
+							audio_float_array=normalized,
 						)
 
 				piperVoice.synthesize = piperSynthesize

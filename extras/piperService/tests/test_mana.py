@@ -27,7 +27,6 @@ from sonata_piper import sonata_grpc_pb2 as messages
 from sonata_piper.backend import Audio, loadPiperVoice, localVoicePaths
 from sonata_piper.server import MAX_AUDIO_BYTES, PiperService, createServer
 
-
 _RESOURCE_VARIABLES = (
 	"SONATA_TEST_VOICE",
 	"SONATA_TEST_EZAFE_MODEL",
@@ -137,7 +136,8 @@ class ManaIntegrationTests(unittest.TestCase):
 				self.assertTrue(capture.chunks, "The engine returned no audio chunks")
 				for chunk in capture.chunks:
 					self.assertEqual(
-						(chunk.sampleRate, chunk.channels, chunk.width), (self.voice.sampleRate, 1, 2)
+						(chunk.sampleRate, chunk.channels, chunk.width),
+						(self.voice.sampleRate, 1, 2),
 					)
 					self.assertEqual(len(chunk.data) % 2, 0)
 				enginePcm = b"".join(chunk.data for chunk in capture.chunks)

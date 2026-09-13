@@ -7,19 +7,19 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
-from dataclasses import asdict
 import hashlib
-from importlib import metadata
 import json
 import logging
-from pathlib import Path
 import platform
 import sys
 import time
 import traceback
-from unittest.mock import patch
 import wave
+from contextlib import ExitStack
+from dataclasses import asdict
+from importlib import metadata
+from pathlib import Path
+from unittest.mock import patch
 
 from .backend import loadPiperVoice, localVoicePaths
 
@@ -166,14 +166,15 @@ def _diagnoseCase(voice, piperVoice, text: str, wavPath: Path) -> dict:
 			result["inference_seconds"] += time.perf_counter() - started
 		# Piper normalizes the returned audio later in synthesize; retain its original amplitude.
 		rawAudio = np.asarray(
-			audioResult[0] if isinstance(audioResult, tuple) else audioResult, dtype=np.float64
+			audioResult[0] if isinstance(audioResult, tuple) else audioResult,
+			dtype=np.float64,
 		)
 		result["raw_inference_audio"].append(
 			{
 				"sample_count": int(rawAudio.size),
 				"peak": float(np.max(np.abs(rawAudio))) if rawAudio.size else 0.0,
 				"rms": float(np.sqrt(np.mean(rawAudio * rawAudio))) if rawAudio.size else 0.0,
-			}
+			},
 		)
 		return audioResult
 
@@ -187,7 +188,7 @@ def _diagnoseCase(voice, piperVoice, text: str, wavPath: Path) -> dict:
 					"joined": "".join(chunk.phonemes),
 					"ids": list(chunk.phoneme_ids),
 					"sample_count": int(chunk.audio_float_array.size),
-				}
+				},
 			)
 			yield chunk
 
@@ -284,7 +285,9 @@ def main(argv: list[str] | None = None) -> int:
 	parser.add_argument("--output", required=True, type=Path, help="Directory for report.json and WAV files")
 	parser.add_argument("--text", action="append", help="Replace default cases; repeat for several inputs")
 	parser.add_argument(
-		"--hash-assets", action="store_true", help="Include SHA256 of the voice and its config"
+		"--hash-assets",
+		action="store_true",
+		help="Include SHA256 of the voice and its config",
 	)
 	args = parser.parse_args(argv)
 	if args.text and any(not text.strip() for text in args.text):

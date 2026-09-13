@@ -77,7 +77,7 @@ class TestSonataAudio(unittest.TestCase):
 		)
 		self.initialize = self.enterContext(mock.patch.object(_sonic, "initialize"))
 		self.factory = self.enterContext(
-			mock.patch.object(_sonic, "SonicStream", side_effect=self._makeStream)
+			mock.patch.object(_sonic, "SonicStream", side_effect=self._makeStream),
 		)
 
 	def _makeStream(self, sampleRate: int, channels: int) -> _BufferedSonic:

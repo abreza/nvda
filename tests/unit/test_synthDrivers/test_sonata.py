@@ -411,7 +411,8 @@ class TestSonataDriver(unittest.TestCase):
 					driver.speak([LangChangeCommand("fa_IR"), text, IndexCommand(1)])
 					items = driver._worker.speak.call_args.args[0]
 					self.assertEqual(
-						[text], [item.text for item in items if isinstance(item, speechWorker.Speech)]
+						[text],
+						[item.text for item in items if isinstance(item, speechWorker.Speech)],
 					)
 					self.assertEqual("default", items[0].voice.id)
 					self.assertEqual(speechWorker.Index(1), items[1])
@@ -452,7 +453,7 @@ class TestSonataDriver(unittest.TestCase):
 					with self.subTest(text=text, useCharMode=useCharMode):
 						driver._worker.reset_mock()
 						sequence = list(
-							nvdaSpeech.getSpellingSpeech(text, locale="fa_IR", useCharMode=useCharMode)
+							nvdaSpeech.getSpellingSpeech(text, locale="fa_IR", useCharMode=useCharMode),
 						)
 						self.assertEqual(
 							[True, False] if useCharMode else [],
@@ -485,7 +486,7 @@ class TestSonataDriver(unittest.TestCase):
 				BreakCommand(80),
 				LangChangeCommand(None),
 				"ادامه",
-			]
+			],
 		)
 		items = driver._worker.speak.call_args.args[0]
 		self.assertEqual(["default", "english", "default"], [items[i].voice.id for i in (0, 1, 4)])

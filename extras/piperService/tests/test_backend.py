@@ -41,8 +41,8 @@ class PiperOptionTests(unittest.TestCase):
 							sample_channels=1,
 							sample_width=2,
 						),
-					]
-				)
+					],
+				),
 			),
 		)
 		self.loader = mock.Mock(return_value=self.engine)
