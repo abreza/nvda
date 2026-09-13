@@ -11,7 +11,14 @@ from threading import Event, Thread
 from types import SimpleNamespace
 from unittest import mock
 
-from speech.commands import BreakCommand, IndexCommand, RateCommand, VolumeCommand
+from speech.commands import (
+	BreakCommand,
+	IndexCommand,
+	LangChangeCommand,
+	PitchCommand,
+	RateCommand,
+	VolumeCommand,
+)
 from synthDrivers import sonata
 from synthDrivers._sonata import worker as speechWorker
 from synthDrivers._sonata.client import Voice
@@ -356,15 +363,123 @@ class TestSonataWorker(unittest.TestCase):
 
 
 class TestSonataDriver(unittest.TestCase):
-	def _driverState(self) -> SimpleNamespace:
-		return SimpleNamespace(
-			_worker=mock.Mock(),
-			_currentVoiceId="default",
-			_voiceData={"default": _voice(speakers={"2": "Second"})},
-			_variant="2",
-			_rate=50,
-			_volume=80,
+	def _driverState(self) -> sonata.SynthDriver:
+		driver = object.__new__(sonata.SynthDriver)
+		driver._worker = mock.Mock()
+		driver._currentVoiceId = "default"
+		driver._voiceData = {"default": _voice(speakers={"2": "Second"})}
+		driver._variant = "2"
+		driver._speakerByVoice = {}
+		driver._rate = 50
+		driver._rateBoost = False
+		driver._pitch = 50
+		driver._volume = 80
+		driver._detectLanguage = False
+		return driver
+
+	def _multilingualDriver(self) -> sonata.SynthDriver:
+		driver = self._driverState()
+		driver._voiceData["english"] = _voice(
+			id="english",
+			language="en_US",
+			sampleRate=24000,
+			speakers={"0": "First", "1": "Second"},
 		)
+		return driver
+
+	def test_pitchCommandsAndRateBoostAreCapturedForFollowingText(self) -> None:
+		driver = self._driverState()
+		driver.rateBoost = True
+		with mock.patch.object(PitchCommand, "defaultValue", new_callable=mock.PropertyMock, return_value=50):
+			driver.speak(["normal", PitchCommand(offset=20), "capital", PitchCommand(), "reset"])
+		items = driver._worker.speak.call_args.args[0]
+		driver.pitch = 10
+		driver.rateBoost = False
+		self.assertEqual([50, 70, 50], [item.pitch for item in items])
+		self.assertTrue(all(item.rateBoost for item in items))
+
+	def test_languageCommandsRestoreDefaultVoiceAndPreserveProgress(self) -> None:
+		driver = self._multilingualDriver()
+		driver._speakerByVoice["english"] = "1"
+		driver.speak(
+			[
+				"فارسی",
+				LangChangeCommand("en-GB"),
+				"English",
+				IndexCommand(4),
+				BreakCommand(80),
+				LangChangeCommand(None),
+				"ادامه",
+			]
+		)
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual(["default", "english", "default"], [items[i].voice.id for i in (0, 1, 4)])
+		self.assertEqual(["2", "1", "2"], [items[i].speaker for i in (0, 1, 4)])
+		self.assertEqual(speechWorker.Index(4), items[2])
+		self.assertEqual(speechWorker.Silence(80, 24000, 1, 2), items[3])
+		self.assertEqual(("default", "2"), (driver.voice, driver.variant))
+		driver.speak(["next"])
+		self.assertEqual("default", driver._worker.speak.call_args.args[0][0].voice.id)
+
+	def test_languageChoicePrefersExactLocaleAndFallsBackForUnavailableLanguage(self) -> None:
+		driver = self._multilingualDriver()
+		driver._voiceData["british"] = _voice(id="british", language="en_GB")
+		driver.speak([LangChangeCommand("EN-gb"), "British", LangChangeCommand("de_DE"), "fallback"])
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual(["british", "default"], [item.voice.id for item in items])
+
+	def test_selectedSpeakerIsRememberedWhenReturningToVoice(self) -> None:
+		driver = self._multilingualDriver()
+		driver.voice = "english"
+		driver.variant = "1"
+		driver.voice = "default"
+		self.assertEqual("2", driver.variant)
+		driver.voice = "english"
+		self.assertEqual("1", driver.variant)
+
+	def test_optionalDetectionRoutesMixedTextWithoutLosingPunctuation(self) -> None:
+		driver = self._multilingualDriver()
+		driver.detectLanguage = True
+		text = "نسخهٔ NVDA 2026، آماده است."
+		driver.speak([text, IndexCommand(9)])
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual(["default", "english", "default"], [item.voice.id for item in items[:-1]])
+		self.assertEqual(text, "".join(item.text for item in items[:-1]))
+		self.assertEqual(speechWorker.Index(9), items[-1])
+
+	def test_detectionIsOptInAndDoesNotFragmentSingleVoiceText(self) -> None:
+		text = "نسخهٔ NVDA 2026 آماده است."
+		for multilingual, enabled in ((True, False), (False, True)):
+			with self.subTest(multilingual=multilingual, enabled=enabled):
+				driver = self._multilingualDriver() if multilingual else self._driverState()
+				driver.detectLanguage = enabled
+				driver.speak([text])
+				items = driver._worker.speak.call_args.args[0]
+				self.assertEqual(1, len(items))
+				self.assertEqual(text, items[0].text)
+
+	def test_explicitLanguageOverridesDetectionUntilReset(self) -> None:
+		driver = self._multilingualDriver()
+		driver.detectLanguage = True
+		driver.speak([LangChangeCommand("en_US"), "سلام NVDA", LangChangeCommand(None), "فارسی"])
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual(["english", "default"], [item.voice.id for item in items])
+		self.assertEqual("سلام NVDA", items[0].text)
+
+	def test_detectionAcceptsNVDADefaultLanguagePrefix(self) -> None:
+		driver = self._multilingualDriver()
+		driver.detectLanguage = True
+		driver.speak([LangChangeCommand("fa_IR"), "سلام NVDA"])
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual(["default", "english"], [item.voice.id for item in items])
+
+	def test_detectionPreservesExplicitPhonemeBlocks(self) -> None:
+		driver = self._multilingualDriver()
+		driver.detectLanguage = True
+		text = "سلام [[ h ə l oʊ ]] دنیا"
+		driver.speak([text])
+		items = driver._worker.speak.call_args.args[0]
+		self.assertEqual([text], [item.text for item in items])
 
 	def test_rateAndVolumeCommandsAffectOnlyFollowingText(self) -> None:
 		driver = self._driverState()

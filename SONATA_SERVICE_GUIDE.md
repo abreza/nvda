@@ -109,11 +109,70 @@ loading rules.
 
 ## Speech behavior and limits
 
-The driver exposes Voice, Variant (speaker), Rate, and Volume. Rate 50 uses the
-voice's normal speed; 0 and 100 request half and double speed. The bundled service
-changes Piper's inference length scale; upstream Sonata can process speed changes
-differently, so the resulting audio need not be identical. Enhanced Persian
-processing is configured on the service command line.
+The Speech settings panel exposes Voice, Variant (speaker), Rate, Rate boost,
+Pitch, Volume, and **Detect Persian and English text**. Enhanced Persian
+processing remains configured on the service command line.
+
+### Speed and pitch
+
+With Rate boost off, Rate 50 uses the voice's normal speed; 0 and 100 request half
+and double speed. The bundled service changes Piper's inference length scale;
+upstream Sonata can process speed changes differently.
+
+With **Rate boost** on, the service synthesizes at normal speed and NVDA uses its
+bundled Sonic audio processor to change tempo. Rate 0, 50, and 100 correspond to
+approximately 0.5, 1, and 6 times normal speed. This avoids forcing the voice model
+to generate extremely compressed speech. It changes playback duration, not model
+inference speed; sustained playback still depends on how quickly the service
+produces audio.
+
+**Pitch** changes pitch locally, independently of tempo: 0, 50, and 100 select
+approximately half, unchanged, and double pitch. NVDA's inline pitch commands
+(including pitch changes for capital letters) are supported. The neutral settings
+bypass Sonic. Processing is incremental; buffered audio is discarded on cancellation
+and drained before speech progress notifications. Explicit timed breaks keep their
+requested duration. No additional Python audio package is required.
+
+### Multiple languages
+
+Load each required voice in the service with a separate `--voice` argument and
+include its alias in `voicePaths` or `NVDA_SONATA_VOICES`. For example, after
+registering both the Mana and Lessac models:
+
+```powershell
+$env:NVDA_SONATA_VOICES = '["fa_IR-mana-medium", "en_US-lessac-medium"]'
+```
+
+When NVDA sends a language change, the driver chooses an exact locale when available,
+then another voice for the same language. An unavailable language falls back to the
+voice selected in Speech settings. A reset restores that voice and its speaker.
+Inline language changes do not change the saved voice; speaker selections are also
+remembered per voice for the current driver session. Enable NVDA's automatic voice
+switching for document language changes to reach the driver.
+
+For mixed text without useful language markup, enable **Detect Persian and English
+text**. When the selected voice is Persian or English, Arabic-script letters are
+routed to a loaded Persian voice and Latin-script letters to a loaded English voice.
+For example, `نسخهٔ NVDA آماده است` uses Persian, English, then Persian speech.
+Numbers, punctuation, diacritics, and Persian joiners are retained. If the matching
+voice is unavailable, adjacent runs using the same fallback voice are kept together.
+
+Detection is off by default. It is a script heuristic: Latin text is assumed to be
+English and Arabic-script text Persian. It applies to text in the selected voice's
+language, including NVDA's default-language prefix. Commands selecting a different
+language take precedence until reset. Text containing `[[ phonemes ]]` is kept intact.
+
+### Service recovery
+
+If an established service becomes temporarily unavailable, the driver retries before
+any audio for that segment has been received, for at most two seconds within the
+request's overall deadline. It reloads the configured voice and checks that its
+audio format and speakers still match. Control cancels recovery as well as speech.
+Once audio has been received, a failed segment is not replayed automatically, avoiding
+duplicate speech. Later requests can connect again. Initial driver selection still
+requires a running service; this does not install or start the service automatically.
+
+### Other behavior
 
 * NVDA retains playback, queue ordering, pause/resume, cancellation, and speech
   progress notifications. Voice and synthesis settings accompany each request.
@@ -148,6 +207,10 @@ the service, select Sonata speech service, speak short and long text, interrupt 
 pause/resume with Shift. Check configured voices, output device selection, and
 recovery after stopping and restarting the service. Test Persian mode with its
 local assets separately. Mocked tests do not establish real audio quality or latency.
+Also check Rate boost at 50 and 100, Pitch changes and capital-letter announcements,
+and a bilingual document with two registered voices. Test detection both enabled
+and disabled, including a language for which no voice is loaded. Cancel during a
+service interruption and verify that restarting it does not replay old speech.
 
 This development branch is based on NVDA's `master` branch and contains the driver,
 protocol definitions, standalone service source, and tests. Keep custom wheel, voice,

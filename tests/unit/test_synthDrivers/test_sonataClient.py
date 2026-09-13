@@ -5,6 +5,7 @@
 """Real loopback RPC regression tests, also runnable without NVDA's native runtime."""
 
 import unittest
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event, Thread
@@ -25,9 +26,18 @@ class TestSonataClient(unittest.TestCase):
 		self.released = Event()
 		self.cancelledOnServer = Event()
 		self.block = False
+		self.blockMethod = None
+		self.failAfterAudio = False
+		self.unavailableOptions = 0
 		self.sampleRate = 22050
 		self.sampleWidth = 2
 		self.pool = ThreadPoolExecutor(max_workers=4)
+		self.port = 0
+		self._startServer()
+		self.client = Client(f"127.0.0.1:{self.port}", timeout=2)
+		self.threads = []
+
+	def _startServer(self):
 		self.server = grpc.server(self.pool)
 		self.server.add_generic_rpc_handlers(
 			(
@@ -53,10 +63,8 @@ class TestSonataClient(unittest.TestCase):
 				),
 			),
 		)
-		port = self.server.add_insecure_port("127.0.0.1:0")
+		self.port = self.server.add_insecure_port(f"127.0.0.1:{self.port}")
 		self.server.start()
-		self.client = Client(f"127.0.0.1:{port}", timeout=2)
-		self.threads = []
 
 	def tearDown(self):
 		self.released.set()
@@ -69,6 +77,7 @@ class TestSonataClient(unittest.TestCase):
 
 	def _load(self, request, context):
 		self.loads += 1
+		self._waitIfBlocked("load", context)
 		return messages.VoiceInfo(
 			voice_id=self.remoteId,
 			audio=messages.AudioInfo(
@@ -82,10 +91,20 @@ class TestSonataClient(unittest.TestCase):
 		)
 
 	def _setOptions(self, request, context):
+		self._waitIfBlocked("options", context)
+		if self.unavailableOptions:
+			self.unavailableOptions -= 1
+			context.abort(grpc.StatusCode.UNAVAILABLE, "Service temporarily unavailable")
 		if request.voice_id != self.remoteId:
 			context.abort(grpc.StatusCode.NOT_FOUND, "Expired voice handle")
 		self.options.append(request.synthesis_options)
 		return request.synthesis_options
+
+	def _waitIfBlocked(self, method, context):
+		if self.blockMethod == method:
+			context.add_callback(self.cancelledOnServer.set)
+			self.entered.set()
+			self.released.wait(3)
 
 	def _speak(self, request, context):
 		self.requests.append(request)
@@ -97,6 +116,8 @@ class TestSonataClient(unittest.TestCase):
 			if not context.is_active():
 				return
 			yield messages.SynthesisResult(wav_samples=chunk)
+		if self.failAfterAudio:
+			context.abort(grpc.StatusCode.UNAVAILABLE, "Service stopped after partial audio")
 
 	def _synthesize(self, voice=None, cancelled=None, rate=50, speaker="0"):
 		if voice is None:
@@ -135,6 +156,117 @@ class TestSonataClient(unittest.TestCase):
 		with self.assertRaisesRegex(ValueError, "voice changed"):
 			self._synthesize(voice)
 		self.assertFalse(self.requests)
+
+	def _synthesizeInThread(self, voice, cancelled=None):
+		output, errors = [], []
+		finished = Event()
+
+		def run():
+			try:
+				output.extend(self._synthesize(voice, cancelled))
+			except Exception as error:  # noqa: BLE001 - propagate worker failures to the test thread.
+				errors.append(error)
+			finally:
+				finished.set()
+
+		thread = Thread(target=run, daemon=True)
+		self.threads.append(thread)
+		thread.start()
+		return output, errors, finished
+
+	def _observeDisconnection(self):
+		disconnected = Event()
+
+		def onConnectivityChanged(state):
+			if state == grpc.ChannelConnectivity.TRANSIENT_FAILURE:
+				disconnected.set()
+
+		self.client._channel.subscribe(onConnectivityChanged, try_to_connect=True)
+		self.addCleanup(self.client._channel.unsubscribe, onConnectivityChanged)
+		return disconnected
+
+	def test_temporaryOutageReloadsVoiceAndRecovers(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.server.stop(0).wait(1)
+		disconnected = self._observeDisconnection()
+		output, errors, finished = self._synthesizeInThread(voice)
+		self.assertTrue(disconnected.wait(1), "Client did not observe the stopped service")
+		self.remoteId = "handle-after-service-restart"
+		self._startServer()
+		self.assertTrue(finished.wait(2), "Client did not recover after the service restarted")
+		self.assertEqual([], errors)
+		self.assertEqual(self.audio, output)
+		self.assertEqual(2, self.loads)
+		self.assertEqual(1, len(self.requests))
+		self.assertEqual(self.remoteId, self.requests[-1].voice_id)
+
+	def test_cancellationInterruptsRecoveryWithoutService(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.server.stop(0).wait(1)
+		disconnected = self._observeDisconnection()
+		cancelled = Event()
+		output, errors, finished = self._synthesizeInThread(voice, cancelled)
+		self.assertTrue(disconnected.wait(1))
+		cancelled.set()
+		self.client.cancel()
+		self.assertTrue(finished.wait(0.5), "Cancellation waited for service recovery")
+		self.assertEqual([], errors)
+		self.assertEqual([], output)
+
+	def test_recoveryHonorsTotalRequestDeadline(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.client._timeout = 0.15
+		self.server.stop(0).wait(1)
+		started = time.monotonic()
+		with self.assertRaises(grpc.RpcError):
+			self._synthesize(voice)
+		self.assertLess(time.monotonic() - started, 0.75)
+		self.assertFalse(self.requests)
+
+	def test_unavailableAfterPartialAudioIsNotReplayed(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.failAfterAudio = True
+		stream = self.client.synthesize(voice, "text", "0", 50, 75, Event())
+		self.assertEqual(self.audio[0], next(stream))
+		with self.assertRaises(grpc.RpcError) as raised:
+			next(stream)
+		self.assertEqual(grpc.StatusCode.UNAVAILABLE, raised.exception.code())
+		self.assertEqual(1, len(self.requests))
+		self.assertEqual(1, self.loads)
+
+	def test_recoveryValidatesMetadataEvenWhenHandleIsUnchanged(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.unavailableOptions = 1
+		self.sampleRate = 48000
+		with self.assertRaisesRegex(ValueError, "voice changed"):
+			self._synthesize(voice)
+		self.assertEqual(2, self.loads)
+		self.assertFalse(self.requests)
+
+	def test_cancelEventInterruptsOptionsWait(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.blockMethod = "options"
+		cancelled = Event()
+		output, errors, finished = self._synthesizeInThread(voice, cancelled)
+		self.assertTrue(self.entered.wait(1))
+		cancelled.set()
+		self.assertTrue(finished.wait(0.5), "Cancellation waited for synthesis options")
+		self.assertEqual([], errors)
+		self.assertEqual([], output)
+		self.assertTrue(self.cancelledOnServer.wait(1))
+
+	def test_cancelEventInterruptsStaleVoiceReload(self):
+		voice = self.client.loadVoices(["default"])[0]
+		self.remoteId = "stale"
+		self.blockMethod = "load"
+		cancelled = Event()
+		output, errors, finished = self._synthesizeInThread(voice, cancelled)
+		self.assertTrue(self.entered.wait(1))
+		cancelled.set()
+		self.assertTrue(finished.wait(0.5), "Cancellation waited for voice reload")
+		self.assertEqual([], errors)
+		self.assertEqual([], output)
+		self.assertTrue(self.cancelledOnServer.wait(1))
 
 	def test_rejectsIncompleteSampleFrame(self):
 		self.audio = [b"\x01"]

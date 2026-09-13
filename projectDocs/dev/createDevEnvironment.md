@@ -49,8 +49,9 @@ The following dependencies need to be installed on your system:
 
 #### Python
 
-[Python](https://www.python.org/), version 3.13.15, 64-bit.
-Install the python version listed in [.python-versions](../../.python-versions)
+[CPython](https://www.python.org/), version 3.13.x, 64-bit.
+Any patch release in the 3.13 series satisfies [.python-versions](../../.python-versions).
+The 32-bit synth driver host runtime builder requires a separate 32-bit CPython 3.13.x installation.
 
 #### uv
 

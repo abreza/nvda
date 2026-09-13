@@ -14,15 +14,24 @@ from importlib.util import find_spec
 import config
 import globalVars
 import languageHandler
+from autoSettingsUtils.driverSetting import BooleanDriverSetting
 from autoSettingsUtils.utils import StringParameterInfo
 from logHandler import log
-from speech.commands import BreakCommand, IndexCommand, RateCommand, VolumeCommand
+from speech.commands import (
+	BreakCommand,
+	IndexCommand,
+	LangChangeCommand,
+	PitchCommand,
+	RateCommand,
+	VolumeCommand,
+)
 from speech.types import SpeechSequence
 from synthDriverHandler import SynthDriver as BaseSynthDriver
 from synthDriverHandler import VoiceInfo, synthDoneSpeaking, synthIndexReached
 
 from ._sonata import worker
 from ._sonata.client import Client, Voice
+from ._sonata.text import languageRuns
 
 _CONNECTION_CONFIG_SPEC = {
 	"endpoint": "string(default='127.0.0.1:50051')",
@@ -68,9 +77,18 @@ class SynthDriver(BaseSynthDriver):
 		BaseSynthDriver.VoiceSetting(),
 		BaseSynthDriver.VariantSetting(),
 		BaseSynthDriver.RateSetting(),
+		BaseSynthDriver.RateBoostSetting(),
+		BaseSynthDriver.PitchSetting(),
 		BaseSynthDriver.VolumeSetting(),
+		BooleanDriverSetting(
+			"detectLanguage",
+			# Translators: Switch between loaded Persian and English voices for text without language markup.
+			_("Detect Persian and English text"),
+		),
 	)
-	supportedCommands = frozenset({IndexCommand, BreakCommand, RateCommand, VolumeCommand})
+	supportedCommands = frozenset(
+		{IndexCommand, BreakCommand, LangChangeCommand, PitchCommand, RateCommand, VolumeCommand},
+	)
 	supportedNotifications = frozenset({synthIndexReached, synthDoneSpeaking})
 
 	@classmethod
@@ -89,8 +107,12 @@ class SynthDriver(BaseSynthDriver):
 		self._voiceData: dict[str, Voice] = {}
 		self._currentVoiceId = ""
 		self._rate = 50
+		self._rateBoost = False
+		self._pitch = 50
 		self._volume = 100
 		self._variant = ""
+		self._speakerByVoice: dict[str, str] = {}
+		self._detectLanguage = False
 		if globalVars.appArgs.secure:
 			raise RuntimeError("Sonata speech service is unavailable in secure mode")
 		endpoint, voicePaths, timeout = _getConnectionSettings()
@@ -162,9 +184,16 @@ class SynthDriver(BaseSynthDriver):
 			raise ValueError(f"Unknown Sonata voice: {voiceId}")
 		if voiceId == self._currentVoiceId:
 			return
+		if self._currentVoiceId:
+			self._speakerByVoice[self._currentVoiceId] = self._variant
 		self._currentVoiceId = voiceId
 		self.__dict__.pop("_availableVariants", None)
-		self._variant = next(iter(self.availableVariants))
+		previousSpeaker = self._speakerByVoice.get(voiceId)
+		self._variant = (
+			previousSpeaker
+			if previousSpeaker is not None and previousSpeaker in self.availableVariants
+			else next(iter(self.availableVariants))
+		)
 
 	def _getAvailableVoices(self) -> OrderedDict[str, VoiceInfo]:
 		return OrderedDict(
@@ -186,6 +215,7 @@ class SynthDriver(BaseSynthDriver):
 		if variant not in self.availableVariants:
 			raise ValueError(f"Unknown Sonata speaker: {variant}")
 		self._variant = variant
+		self._speakerByVoice[self._currentVoiceId] = variant
 
 	def _getAvailableVariants(self) -> OrderedDict[str, StringParameterInfo]:
 		speakers = self._voiceData[self._currentVoiceId].speakers
@@ -200,6 +230,49 @@ class SynthDriver(BaseSynthDriver):
 	def _set_rate(self, rate: int) -> None:
 		self._rate = max(0, min(100, rate))
 
+	def _get_rateBoost(self) -> bool:
+		return self._rateBoost
+
+	def _set_rateBoost(self, enabled: bool) -> None:
+		self._rateBoost = bool(enabled)
+
+	def _get_pitch(self) -> int:
+		return self._pitch
+
+	def _set_pitch(self, pitch: int) -> None:
+		self._pitch = max(0, min(100, pitch))
+
+	def _get_detectLanguage(self) -> bool:
+		return self._detectLanguage
+
+	def _set_detectLanguage(self, enabled: bool) -> None:
+		self._detectLanguage = bool(enabled)
+
+	def _voiceForLanguage(self, language: str | None, default: Voice) -> Voice:
+		"""Prefer an exact locale, then the same language; preserve the user's fallback voice."""
+		if not language:
+			return default
+		requested = language.replace("-", "_").lower()
+		candidates = [default, *(voice for voice in self._voiceData.values() if voice.id != default.id)]
+		for exact in (True, False):
+			for voice in candidates:
+				available = (voice.language or "").replace("-", "_").lower()
+				if available and (
+					available == requested if exact else available.split("_")[0] == requested.split("_")[0]
+				):
+					return voice
+		return default
+
+	def _speakerForVoice(self, voice: Voice) -> str:
+		if voice.id == self._currentVoiceId:
+			return self._variant
+		previous = self._speakerByVoice.get(voice.id)
+		return (
+			previous
+			if previous is not None and previous in voice.speakers
+			else next(iter(voice.speakers), "")
+		)
+
 	def _get_volume(self) -> int:
 		return self._volume
 
@@ -210,17 +283,40 @@ class SynthDriver(BaseSynthDriver):
 		"""Queue speech and command boundaries using an immutable settings snapshot."""
 		if self._worker is None:
 			return
-		voice = self._voiceData[self._currentVoiceId]
-		speaker = self._variant
+		defaultVoice = voice = self._voiceData[self._currentVoiceId]
 		items: list[worker.SpeechItem] = []
 		textParts: list[str] = []
-		rate, volume = self._rate, self._volume
+		rate, volume, pitch = self._rate, self._volume, self._pitch
+		explicitLanguage = False
+		defaultLanguage = (defaultVoice.language or "").replace("-", "_").lower()
+		baseLanguage = defaultLanguage.split("_")[0]
+		detectLanguage = self._detectLanguage and baseLanguage in {"fa", "en"}
 
 		def flushText() -> None:
 			text = "".join(textParts)
 			textParts.clear()
-			if text.strip():
-				items.append(worker.Speech(text, voice, speaker, rate, volume))
+			runs = languageRuns(text) if detectLanguage and not explicitLanguage else [(text, None)]
+			# Merge runs that fall back to the same voice, preserving Persian phrase context.
+			segments: list[tuple[str, Voice]] = []
+			for part, language in runs:
+				selected = self._voiceForLanguage(language, voice)
+				if segments and segments[-1][1].id == selected.id:
+					segments[-1] = (segments[-1][0] + part, selected)
+				else:
+					segments.append((part, selected))
+			for part, selected in segments:
+				if part.strip():
+					items.append(
+						worker.Speech(
+							part,
+							selected,
+							self._speakerForVoice(selected),
+							rate,
+							volume,
+							pitch=pitch,
+							rateBoost=self._rateBoost,
+						),
+					)
 
 		for item in speechSequence:
 			if isinstance(item, str):
@@ -237,6 +333,14 @@ class SynthDriver(BaseSynthDriver):
 				rate = self._rate if item.isDefault else max(0, min(100, item.newValue))
 			elif isinstance(item, VolumeCommand):
 				volume = self._volume if item.isDefault else max(0, min(100, item.newValue))
+			elif isinstance(item, PitchCommand):
+				pitch = self._pitch if item.isDefault else max(0, min(100, item.newValue))
+			elif isinstance(item, LangChangeCommand):
+				# NVDA also prefixes ordinary, unmarked text with its default language.
+				# Permit opt-in detection there; honor commands selecting another language.
+				requested = (item.lang or "").replace("-", "_").lower()
+				explicitLanguage = bool(requested and requested not in {defaultLanguage, baseLanguage})
+				voice = self._voiceForLanguage(item.lang, defaultVoice)
 			else:
 				log.debugWarning(f"Unsupported Sonata speech command: {type(item).__name__}")
 		flushText()

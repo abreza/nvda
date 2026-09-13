@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from ctypes import c_short
 from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Condition, Event, Lock, RLock, Thread
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 import nvwave
 from logHandler import log
 from synthDriverHandler import synthDoneSpeaking, synthIndexReached
+from synthDrivers import _sonic
 
 from .client import Client, Voice
 
@@ -30,6 +32,8 @@ class Speech:
 	speaker: str
 	rate: int
 	volume: int
+	pitch: int = 50
+	rateBoost: bool = False
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,7 @@ class SpeechWorker(Thread):
 		self._cancelling = 0
 		self._player: nvwave.WavePlayer | None = None
 		self._format: tuple[int, int, int] | None = None
+		self._sonicInitialized = False
 
 	def speak(self, items: list[SpeechItem]) -> None:
 		"""Submit one utterance atomically, including its index boundaries."""
@@ -197,17 +202,42 @@ class SpeechWorker(Thread):
 	def _synthesize(self, speech: Speech, cancelled: Event) -> None:
 		voice = speech.voice
 		audioFormat = (voice.numChannels, voice.sampleRate, voice.sampleWidth * 8)
+		stream = None
+		if speech.pitch != 50 or (speech.rateBoost and speech.rate != 50):
+			if not self._sonicInitialized:
+				_sonic.initialize()
+				self._sonicInitialized = True
+			# Each segment owns its buffer. Cancellation or failure destroys any tail
+			# without flushing it into the next utterance or across an index boundary.
+			stream = _sonic.SonicStream(voice.sampleRate, voice.numChannels)
+			stream.pitch = 2.0 ** ((speech.pitch - 50) / 50)
+			if speech.rateBoost:
+				# Keep the lower half of the rate slider unchanged, with normal speed
+				# at 50 and up to six times normal speed at 100.
+				base = 2.0 if speech.rate <= 50 else 6.0
+				stream.speed = base ** ((speech.rate - 50) / 50)
 		for data in self._client.synthesize(
 			voice,
 			speech.text,
 			speaker=speech.speaker,
-			rate=speech.rate,
+			rate=50 if speech.rateBoost else speech.rate,
 			volume=speech.volume,
 			cancelled=cancelled,
 		):
 			if not self._waitUntilReady(cancelled):
 				return
-			self._feed(data, audioFormat, cancelled)
+			if stream is not None:
+				# The client validates complete PCM16 frames before yielding them.
+				buffer = (c_short * (len(data) // 2)).from_buffer_copy(data)
+				stream.writeShort(buffer, len(buffer) // voice.numChannels)
+				data = bytes(stream.readShort())
+			if data:
+				self._feed(data, audioFormat, cancelled)
+		if stream is not None and self._waitUntilReady(cancelled):
+			# Drain Sonic before _speak can sync playback and report an NVDA index.
+			stream.flush()
+			if data := bytes(stream.readShort()):
+				self._feed(data, audioFormat, cancelled)
 
 	def _silence(self, silence: Silence, cancelled: Event) -> None:
 		# Limit buffer size so long breaks remain interruptible.

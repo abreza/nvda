@@ -17,6 +17,8 @@ from urllib.parse import urlsplit
 MAX_AUDIO_MESSAGE = 16 * 1024 * 1024
 MAX_TEXT_BYTES = 256 * 1024
 SERVICE = "/sonata_grpc.sonata_grpc/"
+RECONNECT_TIMEOUT = 2.0
+CANCEL_POLL_INTERVAL = 0.05
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,9 @@ class Client:
 				("grpc.enable_http_proxy", 0),
 				("grpc.max_receive_message_length", MAX_AUDIO_MESSAGE),
 				("grpc.max_send_message_length", MAX_TEXT_BYTES + 4096),
+				("grpc.initial_reconnect_backoff_ms", 100),
+				("grpc.min_reconnect_backoff_ms", 100),
+				("grpc.max_reconnect_backoff_ms", 500),
 			),
 		)
 		self._load = self._channel.unary_unary(
@@ -116,11 +121,22 @@ class Client:
 			if self._active is call:
 				self._active = None
 
-	def _unary(self, method, request, cancelled: Event, timeout: float):
-		call = method.future(request, timeout=max(0.001, timeout))
+	def _unary(self, method, request, cancelled: Event, timeout: float, *, waitForReady: bool = False):
+		if cancelled.is_set() or self._closed:
+			raise self._grpc.FutureCancelledError()
+		call = method.future(request, timeout=max(0.001, timeout), wait_for_ready=waitForReady)
 		try:
 			self._register(call, cancelled)
-			return call.result()
+			while True:
+				if cancelled.is_set() or self._closed:
+					call.cancel()
+				try:
+					result = call.result(timeout=CANCEL_POLL_INTERVAL)
+					if cancelled.is_set() or self._closed:
+						raise self._grpc.FutureCancelledError()
+					return result
+				except self._grpc.FutureTimeoutError:
+					continue
 		finally:
 			self._release(call)
 
@@ -173,6 +189,24 @@ class Client:
 			voices.append(voice)
 		return voices
 
+	def _reloadVoice(self, voice: Voice, cancelled: Event, timeout: float, *, waitForReady: bool) -> None:
+		info = self._unary(
+			self._load,
+			self._messages.VoicePath(config_path=voice.id),
+			cancelled,
+			timeout,
+			waitForReady=waitForReady,
+		)
+		updated = self._voice(voice.id, info)
+		if (updated.sampleRate, updated.numChannels, updated.sampleWidth, updated.speakers) != (
+			voice.sampleRate,
+			voice.numChannels,
+			voice.sampleWidth,
+			voice.speakers,
+		):
+			raise ValueError("Sonata voice changed after reconnect; reload the synthesizer")
+		self._remoteIds[voice.id] = updated.remoteId
+
 	def synthesize(
 		self,
 		voice: Voice,
@@ -182,7 +216,7 @@ class Client:
 		volume: int,
 		cancelled: Event,
 	) -> Iterator[bytes]:
-		"""Stream PCM; allow a stale handle to reload once before producing any audio."""
+		"""Recover briefly from a restarted service; never replay speech after yielding audio."""
 		if len(text.encode("utf-8")) > MAX_TEXT_BYTES:
 			raise ValueError("Sonata speech segment exceeds the request size limit")
 		if speaker not in voice.speakers or not 0 <= rate <= 100 or not 0 <= volume <= 100:
@@ -192,12 +226,26 @@ class Client:
 		# Preserve NVDA's useful half/normal/double speed range at 0/50/100.
 		wireRate = round((2.0 ** ((rate - 50) / 50) - 0.5) * 20)
 		deadline = time.monotonic() + self._timeout
-		for attempt in range(2):
+		reconnectDeadline = None
+		reloadVoice = False
+		reloadedStaleHandle = False
+		while True:
 			if cancelled.is_set() or self._closed:
 				return
 			stream = None
 			producedAudio = False
 			try:
+				setupDeadline = (
+					min(deadline, reconnectDeadline) if reconnectDeadline is not None else deadline
+				)
+				if reloadVoice:
+					self._reloadVoice(
+						voice,
+						cancelled,
+						setupDeadline - time.monotonic(),
+						waitForReady=reconnectDeadline is not None,
+					)
+					reloadVoice = False
 				remoteId = self._remoteIds.get(voice.id, voice.remoteId)
 				self._unary(
 					self._options,
@@ -206,7 +254,8 @@ class Client:
 						synthesis_options=messages.SynthesisOptions(speaker=voice.speakers[speaker]),
 					),
 					cancelled,
-					deadline - time.monotonic(),
+					setupDeadline - time.monotonic(),
+					waitForReady=reconnectDeadline is not None,
 				)
 				if cancelled.is_set() or self._closed:
 					return
@@ -238,28 +287,21 @@ class Client:
 			except (self._grpc.RpcError, self._grpc.FutureCancelledError) as error:
 				if cancelled.is_set() or self._closed:
 					return
-				if (
-					attempt == 0
-					and not producedAudio
-					and isinstance(error, self._grpc.RpcError)
-					and error.code() == self._grpc.StatusCode.NOT_FOUND
-				):
-					info = self._unary(
-						self._load,
-						messages.VoicePath(config_path=voice.id),
-						cancelled,
-						deadline - time.monotonic(),
-					)
-					updated = self._voice(voice.id, info)
-					if (updated.sampleRate, updated.numChannels, updated.sampleWidth, updated.speakers) != (
-						voice.sampleRate,
-						voice.numChannels,
-						voice.sampleWidth,
-						voice.speakers,
-					):
-						raise ValueError("Sonata voice changed after reconnect; reload the synthesizer")
-					self._remoteIds[voice.id] = updated.remoteId
+				if producedAudio or not isinstance(error, self._grpc.RpcError):
+					raise
+				if error.code() == self._grpc.StatusCode.NOT_FOUND and not reloadedStaleHandle:
+					reloadedStaleHandle = True
+					reloadVoice = True
 					continue
+				if error.code() == self._grpc.StatusCode.UNAVAILABLE:
+					if reconnectDeadline is None:
+						reconnectDeadline = min(deadline, time.monotonic() + RECONNECT_TIMEOUT)
+					remaining = reconnectDeadline - time.monotonic()
+					if remaining > 0:
+						# Wait on the request's event so cancelling recovery never waits for the service.
+						cancelled.wait(min(CANCEL_POLL_INTERVAL, remaining))
+						reloadVoice = True
+						continue
 				raise
 			finally:
 				if stream is not None:
