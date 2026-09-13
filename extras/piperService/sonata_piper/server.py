@@ -203,7 +203,8 @@ class PiperService:
 
 	def SynthesizeUtteranceRealtime(self, request, context):
 		context.abort(
-			grpc.StatusCode.UNIMPLEMENTED, "Use SynthesizeUtterance; realtime inference is unavailable"
+			grpc.StatusCode.UNIMPLEMENTED,
+			"Use SynthesizeUtterance; realtime inference is unavailable",
 		)
 
 
@@ -262,11 +263,16 @@ def configuredVoices(paths: Iterable[str], **options) -> dict[str, Voice]:
 def main(argv: list[str] | None = None) -> None:
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument(
-		"--voice", action="append", required=True, help="Local .onnx or .onnx.json; repeat for more voices"
+		"--voice",
+		action="append",
+		required=True,
+		help="Local .onnx or .onnx.json; repeat for more voices",
 	)
 	parser.add_argument("--port", type=int, default=50051, help="Loopback TCP port (default: 50051)")
 	parser.add_argument(
-		"--persian-phonemizer", action="store_true", help="Enable the custom Persian frontend"
+		"--persian-phonemizer",
+		action="store_true",
+		help="Enable the custom Persian frontend",
 	)
 	parser.add_argument("--ezafe-model", help="Local Ezafe model directory")
 	parser.add_argument("--homograph-dictionary", help="Local Persian homograph dictionary file")

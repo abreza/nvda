@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 import grpc
+
 from sonata_piper import sonata_grpc_pb2 as messages
 from sonata_piper.backend import Audio, Settings, Voice, localVoicePaths
 from sonata_piper.server import MAX_AUDIO_BYTES, MAX_TEXT_BYTES, PiperService, configuredVoices, createServer
@@ -42,7 +43,12 @@ class ServiceTests(unittest.TestCase):
 			self.finished.set()
 
 		self.voice = Voice(
-			"test", "fa_IR", 22050, {0: "Mana", 1: "Other"}, Settings(0, 1, 0.667, 0.8), synthesize
+			"test",
+			"fa_IR",
+			22050,
+			{0: "Mana", 1: "Other"},
+			Settings(0, 1, 0.667, 0.8),
+			synthesize,
 		)
 		self.service = PiperService({"default": self.voice, "test": self.voice})
 		self.server = createServer(self.service)
@@ -140,7 +146,8 @@ class ServiceTests(unittest.TestCase):
 		):
 			with self.subTest(changes=changes):
 				self.assertStatus(
-					grpc.StatusCode.INVALID_ARGUMENT, lambda changes=changes: self.options(**changes)
+					grpc.StatusCode.INVALID_ARGUMENT,
+					lambda changes=changes: self.options(**changes),
 				)
 		self.assertEqual(self.options().speaker, "Mana")
 

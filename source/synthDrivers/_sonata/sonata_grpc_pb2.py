@@ -15,7 +15,7 @@ _runtime_version.ValidateProtobufRuntimeVersion(
     31,
     1,
     '',
-    'sonata_grpc.proto'
+    'sonata_grpc.proto',
 )
 # @@protoc_insertion_point(imports)
 

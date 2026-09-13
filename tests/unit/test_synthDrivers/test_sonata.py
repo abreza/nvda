@@ -64,10 +64,10 @@ class TestSonataWorker(unittest.TestCase):
 		self.client = mock.Mock()
 		self.client.synthesize.side_effect = lambda voice, text, **kwargs: iter([text.encode()])
 		self.enterContext(
-			mock.patch.object(speechWorker.synthIndexReached, "notify", side_effect=self._onIndex)
+			mock.patch.object(speechWorker.synthIndexReached, "notify", side_effect=self._onIndex),
 		)
 		self.enterContext(
-			mock.patch.object(speechWorker.synthDoneSpeaking, "notify", side_effect=self._onDone)
+			mock.patch.object(speechWorker.synthDoneSpeaking, "notify", side_effect=self._onDone),
 		)
 		self.enterContext(mock.patch.object(speechWorker.nvwave, "WavePlayer", side_effect=self._makePlayer))
 
@@ -452,7 +452,9 @@ class TestSonataDriver(unittest.TestCase):
 		with (
 			mock.patch.object(sonata.globalVars.appArgs, "secure", False),
 			mock.patch.object(
-				sonata, "_getConnectionSettings", return_value=("localhost:50051", ["mana"], 30)
+				sonata,
+				"_getConnectionSettings",
+				return_value=("localhost:50051", ["mana"], 30),
 			),
 			mock.patch.object(sonata, "Client") as client,
 			mock.patch.object(sonata.BaseSynthDriver, "__init__", return_value=None) as baseInit,
@@ -470,11 +472,15 @@ class TestSonataDriver(unittest.TestCase):
 		with (
 			mock.patch.object(sonata.globalVars.appArgs, "secure", False),
 			mock.patch.object(
-				sonata, "_getConnectionSettings", return_value=("localhost:50051", ["mana"], 30)
+				sonata,
+				"_getConnectionSettings",
+				return_value=("localhost:50051", ["mana"], 30),
 			),
 			mock.patch.object(sonata, "Client") as client,
 			mock.patch.object(
-				sonata.BaseSynthDriver, "__init__", side_effect=lambda: order.append("register")
+				sonata.BaseSynthDriver,
+				"__init__",
+				side_effect=lambda: order.append("register"),
 			),
 			mock.patch.object(speechWorker, "SpeechWorker") as worker,
 		):
@@ -496,7 +502,9 @@ class TestSonataDriver(unittest.TestCase):
 		with (
 			mock.patch.object(sonata.globalVars.appArgs, "secure", False),
 			mock.patch.object(
-				sonata, "_getConnectionSettings", return_value=("localhost:50051", ["mana"], 30)
+				sonata,
+				"_getConnectionSettings",
+				return_value=("localhost:50051", ["mana"], 30),
 			),
 			mock.patch.object(sonata, "Client") as client,
 			mock.patch.object(sonata.BaseSynthDriver, "__init__", return_value=None),

@@ -72,7 +72,9 @@ class TestSonataClient(unittest.TestCase):
 		return messages.VoiceInfo(
 			voice_id=self.remoteId,
 			audio=messages.AudioInfo(
-				sample_rate=self.sampleRate, num_channels=1, sample_width=self.sampleWidth
+				sample_rate=self.sampleRate,
+				num_channels=1,
+				sample_width=self.sampleWidth,
 			),
 			language="fa_IR",
 			speakers={0: "Mana", 2: "Other speaker"},

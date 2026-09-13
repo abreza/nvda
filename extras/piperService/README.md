@@ -51,26 +51,26 @@ The checked-in messages are generated from
 the original Sonata MIT license beside the generated module. The generic gRPC
 handlers use the upstream service name `sonata_grpc.sonata_grpc` and method names.
 
-- `GetSonataVersion` identifies this implementation as `sonata-piper-service/0.1.0`.
-- `LoadVoice` accepts `default` for the first configured voice, a configured model
+* `GetSonataVersion` identifies this implementation as `sonata-piper-service/0.1.0`.
+* `LoadVoice` accepts `default` for the first configured voice, a configured model
   stem such as `fa_IR-mana-medium`, its `.onnx` or `.onnx.json` filename, or the
   absolute model/configuration path supplied at startup. Other paths are rejected;
   an RPC cannot cause a new model or file to be loaded.
-- Every `LoadVoice` returns a unique handle. Use that handle for `GetVoiceInfo`,
+* Every `LoadVoice` returns a unique handle. Use that handle for `GetVoiceInfo`,
   `GetSynthesisOptions`, `SetSynthesisOptions`, and synthesis. Models are shared,
   while synthesis settings are private to each handle. Speaker options contain
   the **speaker name** from `VoiceInfo.speakers`, following upstream Sonata.
-- `SynthesizeUtterance` supports unspecified or lazy synthesis mode. It returns
+* `SynthesizeUtterance` supports unspecified or lazy synthesis mode. It returns
   raw mono signed PCM16 little-endian samples in messages of at most 64 KiB.
   `sample_width` is `2` bytes. `wav_samples` does not include a WAV file header.
   `rtf` is left at its protobuf default, `0`; no timing measurement is reported.
-- The optional wire `rate` has Sonata's range `0..100`, corresponding to speed
+* The optional wire `rate` has Sonata's range `0..100`, corresponding to speed
   `0.5 + rate / 20`: `10` is normal speed. Omitting it preserves the configured
   length scale. Volume is `0..100`, with `100` as the default. Piper applies speed
   through its inference length scale, so output need not match Sonata's audio
   postprocessing. Pitch adjustment is unavailable; only omitted or neutral `50`
   is accepted. Appended silence is limited to 60 seconds.
-- `supports_streaming_output` is false, and `SynthesizeUtteranceRealtime` returns
+* `supports_streaming_output` is false, and `SynthesizeUtteranceRealtime` returns
   `UNIMPLEMENTED`. Sending completed audio in bounded network messages does not
   make Piper inference generate its first audio earlier. The custom Persian
   frontend can process an entire input as one synthesis unit.

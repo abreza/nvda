@@ -115,19 +115,19 @@ changes Piper's inference length scale; upstream Sonata can process speed change
 differently, so the resulting audio need not be identical. Enhanced Persian
 processing is configured on the service command line.
 
-- NVDA retains playback, queue ordering, pause/resume, cancellation, and speech
+* NVDA retains playback, queue ordering, pause/resume, cancellation, and speech
   progress notifications. Voice and synthesis settings accompany each request.
-- Cancellation stops local playback and invalidates late audio. Whether inference
+* Cancellation stops local playback and invalidates late audio. Whether inference
   itself stops immediately depends on the model and service.
-- A request's deadline continues during a pause. If a long pause exceeds that
+* A request's deadline continues during a pause. If a long pause exceeds that
   deadline while audio is still being received, the unfinished request can expire.
   Increase `requestTimeout` for slower synthesis or longer pauses, within its limit.
-- Audio arrives as a stream of chunks. This does not guarantee synthesis can yield
+* Audio arrives as a stream of chunks. This does not guarantee synthesis can yield
   audio partway through a sentence; time to first audio depends on the model's
   chunking and inference speed.
-- This initial driver accepts loopback endpoints only. Remote computers, public
+* This initial driver accepts loopback endpoints only. Remote computers, public
   hosting, authentication, and encrypted transport are outside this implementation.
-- The driver is unavailable on the Windows secure desktop. NVDA uses its normal
+* The driver is unavailable on the Windows secure desktop. NVDA uses its normal
   synthesizer fallback behavior there; do not depend on this service for sign-in
   or elevation prompts.
 
