@@ -1,12 +1,12 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2007-2025 NV Access Limited, Rui Batista, Joseph Lee, Leonard de Ruijter, Babbage B.V.,
+# Copyright (C) 2007-2026 NV Access Limited, Rui Batista, Joseph Lee, Leonard de Ruijter, Babbage B.V.,
 # Accessolutions, Julien Cochuyt, Cyrille Bougot, Łukasz Golonka
-# This file is covered by the GNU General Public License.
-# See the file COPYING for more details.
+# This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
+# For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
 """Utilities and classes to manage logging in NVDA"""
 
-import os
+import os  # noqa: I001
 import ctypes
 import sys
 import threading
@@ -21,6 +21,7 @@ import winBindings.kernel32
 import winKernel
 import buildVersion
 from typing import (
+	Any,
 	Literal,
 	NamedTuple,
 	Protocol,
@@ -30,6 +31,7 @@ import exceptions
 import RPCConstants
 import NVDAState
 from NVDAState import WritePaths
+
 
 if TYPE_CHECKING:
 	import extensionPoints
@@ -69,7 +71,7 @@ def getFormattedStacksForAllThreads() -> str:
 
 def isPathExternalToNVDA(path: str) -> bool:
 	"""Checks if the given path is external to NVDA (I.e. not pointing to built-in code)."""
-	if (
+	if (  # noqa: SIM103
 		path[0] != "<"
 		and os.path.isabs(path)
 		and not os.path.normpath(path).startswith(_NVDA_CODE_PATH + "\\")
@@ -183,13 +185,21 @@ def getOnErrorSoundRequested() -> "extensionPoints.Action":
 def shouldPlayErrorSound() -> bool:
 	"""Indicates if an error sound should be played when an error is logged."""
 	import config
+	from config.configFlags import PlayErrorSound
 
-	# Only play the error sound if this is a test version or if the config states it explicitly.
-	return (
-		buildVersion.isTestVersion
-		# Play error sound: 1 = Yes
-		or (config.conf is not None and config.conf["featureFlag"]["playErrorSound"] == 1)
+	playErrorSound = (
+		PlayErrorSound(config.conf["featureFlag"]["playErrorSound"])
+		if config.conf
+		else PlayErrorSound.ONLY_IN_TEST_VERSIONS
 	)
+
+	match playErrorSound:
+		case PlayErrorSound.YES:
+			return True
+		case PlayErrorSound.NO:
+			return False
+		case PlayErrorSound.ONLY_IN_TEST_VERSIONS:
+			return buildVersion.isTestVersion
 
 
 # Function to strip the base path of our code from traceback text to improve readability.
@@ -211,9 +221,10 @@ _excInfo_t = tuple[type[BaseException] | None, BaseException | None, TracebackTy
 
 class Logger(logging.Logger):
 	# Import standard levels for convenience.
-	from logging import DEBUG, INFO, WARNING, WARN, ERROR, CRITICAL
+	from logging import DEBUG, INFO, WARNING, WARN, ERROR, CRITICAL  # noqa: I001
 
 	# Our custom levels.
+	DEBUG_UNREDACTED = 5
 	IO = 12
 	DEBUGWARNING = 15
 	OFF = 100
@@ -225,15 +236,30 @@ class Logger(logging.Logger):
 
 	def _log(
 		self,
-		level,
-		msg,
-		args,
-		exc_info=None,
-		extra=None,
-		codepath=None,
-		activateLogViewer=False,
-		stack_info=None,
-	):
+		level: int,
+		msg: str,
+		args: tuple[Any, ...],
+		exc_info: _excInfo_t | bool | BaseException = None,
+		extra: dict | None = None,
+		codepath: str | None = None,
+		activateLogViewer: bool = False,
+		stack_info: list[traceback.FrameSummary] | bool | None = None,
+		redactSecrets: bool = False,
+	) -> Any:
+		"""Logs a message with the given severity level.
+
+		:param level: The severity level of the log message.
+		:param msg: The log message, which may contain format specifiers that will be replaced by the values in `args`.
+		:param args: The arguments to be merged into `msg` using the `%` operator for string formatting.
+		:param exc_info: Exception information to be logged
+		:param extra: Additional information to be logged
+		:param codepath: The code path where the log was generated
+		:param activateLogViewer: Whether to activate the log viewer
+		:param stack_info: Stack information to be logged
+		:param redactSecrets: Whether to check for and redact secrets in the log message
+		:return: The result of the logging operation (None for builtin handlers).
+		"""
+
 		if not extra:
 			extra = {}
 
@@ -265,7 +291,26 @@ class Logger(logging.Logger):
 				"".join(traceback.format_list(stack_info)).rstrip(),
 			)
 
-		res = super()._log(level, msg, args, exc_info, extra)
+		if redactSecrets and self.getEffectiveLevel() > self.DEBUG_UNREDACTED:
+			from detect_secrets.core.scan import scan_line
+			from detect_secrets.settings import default_settings
+
+			try:
+				formattedMsg = msg % args if args else msg
+			except Exception:  # noqa: BLE001
+				formattedMsg = msg
+				self.exception(
+					"Failed to format log message for secret redaction, logging unredacted exception.",
+				)
+
+			with default_settings():
+				for secret in list(scan_line(formattedMsg)):
+					formattedMsg = formattedMsg.replace(secret.secret_value, "****")
+
+			res = super()._log(level, formattedMsg, (), exc_info, extra)
+
+		else:
+			res = super()._log(level, msg, args, exc_info, extra)
 
 		if activateLogViewer:
 			# Make the log text we just wrote appear in the log viewer.
@@ -397,7 +442,7 @@ class RemoteHandler(logging.Handler):
 		msg = self.format(record)
 		try:
 			self._remoteLib.nvdaControllerInternal_logMessage(record.levelno, globalVars.appPid, msg)
-		except WindowsError:
+		except OSError:
 			pass
 
 
@@ -415,7 +460,7 @@ class Formatter(logging.Formatter):
 	default_msec_format = "%s.%03d"
 
 	def formatException(self, ex):
-		return stripBasePathFromTracebackText(super(Formatter, self).formatException(ex))
+		return stripBasePathFromTracebackText(super().formatException(ex))
 
 	def format(self, record: logging.LogRecord) -> str:
 		# NVDA's log calls provide / generate a special 'codepath' record attribute.
@@ -442,7 +487,7 @@ class Formatter(logging.Formatter):
 		return self.default_msec_format % (res, record.msecs)
 
 
-class StreamRedirector(object):
+class StreamRedirector:
 	"""Redirects an output stream to a logger."""
 
 	def __init__(self, name, logger, level):
@@ -552,7 +597,7 @@ def _shouldDisableLogging() -> bool:
 	* `--debug-logging` or `--log-level=X` overrides the user config log level setting.
 	* `--debug-logging` and `--log-level=X` override `--no-logging`.
 	"""
-	logLevelOverridden = globalVars.appArgs.debugLogging or not globalVars.appArgs.logLevel == 0
+	logLevelOverridden = globalVars.appArgs.debugLogging or not globalVars.appArgs.logLevel == 0  # noqa: SIM201
 	noLoggingRequested = globalVars.appArgs.noLogging and not logLevelOverridden
 	return globalVars.appArgs.secure or noLoggingRequested
 
@@ -574,7 +619,8 @@ def initialize(shouldDoRemoteLogging=False):
 	@var shouldDoRemoteLogging: True if all logging should go to the real NVDA via rpc (for slave)
 	@type shouldDoRemoteLogging: bool
 	"""
-	global log, logHandler
+	global log, logHandler  # noqa: PLW0602
+	logging.addLevelName(Logger.DEBUG_UNREDACTED, "DEBUG_UNREDACTED")
 	logging.addLevelName(Logger.DEBUGWARNING, "DEBUGWARNING")
 	logging.addLevelName(Logger.IO, "IO")
 	logging.addLevelName(Logger.OFF, "OFF")
@@ -600,11 +646,11 @@ def initialize(shouldDoRemoteLogging=False):
 				if os.path.exists(oldLogFileName):
 					os.unlink(oldLogFileName)
 				os.rename(globalVars.appArgs.logFileName, oldLogFileName)
-			except (IOError, WindowsError):
+			except OSError:
 				pass  # Probably log does not exist, don't care.
 			try:
 				logHandler = FileHandler(globalVars.appArgs.logFileName, mode="w", encoding="utf-8")
-			except IOError:
+			except OSError:
 				# if log cannot be opened, we use NullHandler to avoid logging preserving logger behaviour
 				# and set log filename to None to inform logViewer about it
 				globalVars.appArgs.logFileName = None
@@ -649,13 +695,19 @@ def setLogLevelFromConfig():
 		return
 	import config
 
-	levelName = config.conf["general"]["loggingLevel"]
-	# logging.getLevelName can give you a level number if given a name.
-	level = logging.getLevelName(levelName)
+	levelName: str = config.conf["general"]["loggingLevel"]
+	level = logging.getLevelNamesMapping().get(levelName)
 	# The lone exception to level higher than INFO is "OFF" (100).
 	# Setting a log level to something other than options found in the GUI is unsupported.
-	if level not in (log.DEBUG, log.IO, log.DEBUGWARNING, log.INFO, log.OFF):
-		log.warning("invalid setting for logging level: %s" % levelName)
+	if level is None or level not in (
+		log.DEBUG_UNREDACTED,
+		log.DEBUG,
+		log.IO,
+		log.DEBUGWARNING,
+		log.INFO,
+		log.OFF,
+	):
+		log.warning("invalid setting for logging level: %s" % levelName)  # noqa: UP031
 		level = log.INFO
 		config.conf["general"]["loggingLevel"] = logging.getLevelName(log.INFO)
 	log.root.setLevel(level)

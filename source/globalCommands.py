@@ -1,18 +1,16 @@
-# -*- coding: UTF-8 -*-
 # A part of NonVisual Desktop Access (NVDA)
-# This file is covered by the GNU General Public License.
-# See the file COPYING for more details.
-# Copyright (C) 2006-2025 NV Access Limited, Peter Vágner, Aleksey Sadovoy, Rui Batista, Joseph Lee,
+# Copyright (C) 2006-2026 NV Access Limited, Peter Vágner, Aleksey Sadovoy, Rui Batista, Joseph Lee,
 # Leonard de Ruijter, Derek Riemer, Babbage B.V., Davy Kager, Ethan Holliger, Łukasz Golonka, Accessolutions,
 # Julien Cochuyt, Jakub Lukowicz, Bill Dengler, Cyrille Bougot, Rob Meredith, Luke Davis,
 # Burman's Computer and Education Ltd, Cary-rowen.
+# This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
+# For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
-import itertools
+import itertools  # noqa: I001
 from typing import (
-	Optional,
-	Tuple,
-	Union,
+	TYPE_CHECKING,
 )
+from comtypes import COMError
 from annotation import (
 	_AnnotationNavigation,
 	_AnnotationNavigationNode,
@@ -24,6 +22,9 @@ import keyboardHandler
 import mouseHandler
 import eventHandler
 import review
+import _magnifier
+import _magnifier.commands
+from _magnifier.utils.types import MagnifierTrackingType
 import controlTypes
 import api
 import textInfos
@@ -32,6 +33,7 @@ from speech import (
 	sayAll,
 	shortcutKeys,
 )
+from speech.speech import CHUNK_SEPARATOR
 from NVDAObjects import NVDAObject, NVDAObjectTextInfo
 import globalVars
 from logHandler import log, Logger
@@ -55,11 +57,13 @@ import winKernel
 import treeInterceptorHandler
 import browseMode
 import languageHandler
-import scriptHandler
-from scriptHandler import script
+from scriptHandler import script, getLastScriptRepeatCount
 import ui
 import braille
-import brailleInput
+import braille.constants
+import braille.display.gesture
+import braille.regions.focus
+import braille.input
 import inputCore
 import characterProcessing
 from baseObject import ScriptableObject
@@ -72,7 +76,9 @@ import audio
 import synthDriverHandler
 from utils.displayString import DisplayStringEnum
 import _remoteClient
-import _localCaptioner
+
+if TYPE_CHECKING:
+	import documentBase
 
 #: Script category for text review commands.
 # Translators: The name of a category of NVDA commands.
@@ -101,6 +107,9 @@ SCRCAT_BRAILLE = _("Braille")
 #: Script category for Vision commands.
 # Translators: The name of a category of NVDA commands.
 SCRCAT_VISION = _("Vision")
+#: Script category for Magnifier commands.
+# Translators: The name of a category of NVDA commands.
+SCRCAT_MAGNIFIER = _("Magnifier")
 #: Script category for tools commands.
 # Translators: The name of a category of NVDA commands.
 SCRCAT_TOOLS = pgettext("script category", "Tools")
@@ -125,9 +134,8 @@ SCRCAT_AUDIO = _("Audio")
 #: Script category for Remote Access commands.
 # Translators: The name of a category of NVDA commands.
 SCRCAT_REMOTE = pgettext("remote", "Remote Access")
-#: Script category for image description commands.
-# Translators: The name of a category of NVDA commands.
-SCRCAT_IMAGE_DESC = pgettext("imageDesc", "Image Descriptions")
+# Translators: The name of the category of math navigation commands in the Input Gestures dialog.
+SCRCAT_MATH_NAV = _("Math navigation")
 
 # Translators: Reported when there are no settings to configure in synth settings ring
 # (example: when there is no setting for language).
@@ -187,6 +195,41 @@ def toggleIntegerValue(
 class GlobalCommands(ScriptableObject):
 	"""Commands that are available at all times, regardless of the current focus."""
 
+	def __init__(self) -> None:
+		super().__init__()
+		self._reviewCopyStartMarker: textInfos.TextInfo | None = None
+		self._reviewCopyStartMarkerObj: documentBase.TextContainerObject | None = None
+		self._reviewSelectThenCopyRange: textInfos.TextInfo | None = None
+
+	def _clearReviewCopyStartMarker(self) -> None:
+		self._reviewCopyStartMarker = None
+		self._reviewCopyStartMarkerObj = None
+		self._reviewSelectThenCopyRange = None
+
+	def _getReviewCopyStartMarker(self, pos: textInfos.TextInfo) -> textInfos.TextInfo | None:
+		"""Return the review copy start marker if it is valid for ``pos``.
+
+		The marker is only valid when ``pos`` uses the same TextInfo implementation
+		and an equivalent text container. A comparison dry-run rejects stale native
+		ranges that cannot be used together.
+		"""
+		startMarker = self._reviewCopyStartMarker
+		if startMarker is None:
+			return None
+		startMarkerObj = self._reviewCopyStartMarkerObj
+		if startMarkerObj is None:
+			self._clearReviewCopyStartMarker()
+			return None
+		posObj = pos.obj
+		if pos.__class__ is not startMarker.__class__ or posObj != startMarkerObj:
+			return None
+		try:
+			pos.compareEndPoints(startMarker, "startToStart")
+		except (COMError, LookupError, NotImplementedError, RuntimeError) as e:
+			log.debug(f"Error comparing review position with marked text: {e}")
+			return None
+		return startMarker
+
 	@script(
 		description=_(
 			# Translators: Describes the Cycle audio ducking mode command.
@@ -196,7 +239,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="kb:NVDA+shift+d",
 	)
 	def script_cycleAudioDuckingMode(self, gesture):
-		if not audioDucking.isAudioDuckingSupported():
+		if not audioDucking.isAudioDuckingSupported() or audioDucking._isAudioDuckingSuspended():
 			# Translators: a message when audio ducking is not supported on this machine
 			ui.message(_("Audio ducking not supported"))
 			return
@@ -274,7 +317,7 @@ class GlobalCommands(ScriptableObject):
 		except (NotImplementedError, RuntimeError):
 			info = obj.makeTextInfo(textInfos.POSITION_FIRST)
 		info.expand(textInfos.UNIT_LINE)
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:
 			speech.speakTextInfo(info, unit=textInfos.UNIT_LINE, reason=controlTypes.OutputReason.CARET)
 		else:
@@ -396,7 +439,7 @@ class GlobalCommands(ScriptableObject):
 			# Translators: The message reported when there is no selection
 			ui.message(_("No selection"))
 		else:
-			scriptCount = scriptHandler.getLastScriptRepeatCount()
+			scriptCount = getLastScriptRepeatCount()
 			# Translators: The message reported after selected text
 			selectMessage = speech.speech._getSelectionMessageSpeech(_("%s selected"), info.text)[0]
 			if scriptCount == 0:
@@ -440,7 +483,7 @@ class GlobalCommands(ScriptableObject):
 		speakOnDemand=True,
 	)
 	def script_dateTime(self, gesture):
-		if scriptHandler.getLastScriptRepeatCount() == 0:
+		if getLastScriptRepeatCount() == 0:
 			if systemUtils._isSystemClockSecondsVisible():
 				text = winKernel.GetTimeFormatEx(winKernel.LOCALE_NAME_USER_DEFAULT, None, None, None)
 			else:
@@ -470,7 +513,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.first()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for set the last value in the synth ring settings.
@@ -483,7 +526,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.last()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for increase synth setting value command.
@@ -497,7 +540,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.increase()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for increasing synth setting value command in larger steps.
@@ -511,7 +554,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.increaseLarge()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for decrease synth setting value command.
@@ -525,7 +568,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.decrease()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for decreasing synth setting value command in larger steps.
@@ -539,7 +582,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		settingValue = globalVars.settingsRing.decreaseLarge()
-		ui.message("%s %s" % (settingName, settingValue))
+		ui.message("%s %s" % (settingName, settingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for next synth setting command.
@@ -553,7 +596,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		nextSettingValue = globalVars.settingsRing.currentSettingValue
-		ui.message("%s %s" % (nextSettingName, nextSettingValue))
+		ui.message("%s %s" % (nextSettingName, nextSettingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for previous synth setting command.
@@ -567,7 +610,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(NO_SETTINGS_MSG)
 			return
 		previousSettingValue = globalVars.settingsRing.currentSettingValue
-		ui.message("%s %s" % (previousSettingName, previousSettingValue))
+		ui.message("%s %s" % (previousSettingName, previousSettingValue))  # noqa: UP031
 
 	@script(
 		# Translators: Input help mode message for toggling keyboard layout.
@@ -843,6 +886,54 @@ class GlobalCommands(ScriptableObject):
 		else:
 			# Translators: Message presented when turning off reporting spelling errors or grammar in braille.
 			ui.message(_("Report errors in braille off"))
+
+	@script(
+		# Translators: Input help mode message for command to toggle braille automatic scroll.
+		description=_("Toggles braille automatic scroll"),
+		category=SCRCAT_BRAILLE,
+		gesture="kb:NVDA+alt+k",
+	)
+	def script_toggleBrailleAutoScroll(self, gesture: inputCore.InputGesture):
+		shouldEnableAutoScroll = braille.handler._autoScrollCallLater is None
+		timeout = 0
+		if shouldEnableAutoScroll:
+			# Translators: Message reported when automatic scrolling has been enabled in braille.
+			ui.message(_("Automatic scrolling enabled"))
+			if not (
+				config.conf["braille"]["showMessages"] == ShowMessages.DISABLED
+				or config.conf["braille"]["mode"] == BrailleMode.SPEECH_OUTPUT.value
+			):
+				timeout = config.conf["braille"]["messageTimeout"] * 1000
+		else:
+			# Translators: Message reported when automatic scrolling has been disabled in braille.
+			ui.message(_("Automatic scrolling disabled"))
+		core.callLater(timeout, braille.handler.autoScroll, shouldEnableAutoScroll)
+
+	@script(
+		# Translators: Input help mode message for command to increase the rate for braille automatic scroll.
+		description=_("Increases the rate for braille automatic scroll"),
+		category=SCRCAT_BRAILLE,
+		gesture="kb:NVDA+alt+l",
+	)
+	def script_increaseBrailleAutoScrollRate(self, gesture: inputCore.InputGesture):
+		config.conf.clampedIncrementAndUpdateConfig("braille", "autoScrollRate", step=0.5)
+		percentage = config.conf.valueToPercentage("braille", "autoScrollRate")
+		# Translators: Message shown when increasing the braille auto scroll rate.
+		# {rate} will be replaced with the rate as a whole number from 0 to 100.
+		ui.message(_("Scroll rate {rate}").format(rate=percentage))
+
+	@script(
+		# Translators: Input help mode message for command to decrease the rate for braille automatic scroll.
+		description=_("Decreases the rate for braille automatic scroll"),
+		category=SCRCAT_BRAILLE,
+		gesture="kb:NVDA+alt+j",
+	)
+	def script_decreaseBrailleAutoScrollRate(self, gesture: inputCore.InputGesture):
+		config.conf.clampedIncrementAndUpdateConfig("braille", "autoScrollRate", step=-0.5)
+		percentage = config.conf.valueToPercentage("braille", "autoScrollRate")
+		# Translators: Message shown when decreasing the braille auto scroll rate.
+		# {rate} will be replaced with the rate as a whole number from 0 to 100.
+		ui.message(_("Scroll rate {rate}").format(rate=percentage))
 
 	@script(
 		# Translators: Input help mode message for toggle report pages command.
@@ -1428,7 +1519,7 @@ class GlobalCommands(ScriptableObject):
 			ui.reviewMessage(gui.blockAction.Context.WINDOWS_LOCKED.translatedMessage)
 			return
 
-		if scriptHandler.getLastScriptRepeatCount() >= 1:
+		if getLastScriptRepeatCount() >= 1:
 			if curObject.TextInfo != NVDAObjectTextInfo:
 				textList = []
 				name = curObject.name
@@ -1452,7 +1543,7 @@ class GlobalCommands(ScriptableObject):
 						textList.append(prop)
 			text = " ".join(textList)
 			if len(text) > 0 and not text.isspace():
-				if scriptHandler.getLastScriptRepeatCount() == 1:
+				if getLastScriptRepeatCount() == 1:
 					speech.speakSpelling(text)
 				else:
 					api.copyToClip(text, notify=True)
@@ -1464,7 +1555,7 @@ class GlobalCommands(ScriptableObject):
 			braille.handler.message(text)
 
 	@staticmethod
-	def _reportLocationText(objs: Tuple[Union[None, NVDAObject, textInfos.TextInfo], ...]) -> None:
+	def _reportLocationText(objs: tuple[None | NVDAObject | textInfos.TextInfo, ...]) -> None:
 		for obj in objs:
 			if obj is not None and obj.locationText:
 				ui.message(obj.locationText)
@@ -1534,7 +1625,7 @@ class GlobalCommands(ScriptableObject):
 		speakOnDemand=True,
 	)
 	def script_navigatorObject_currentDimensions(self, gesture):
-		if scriptHandler.getLastScriptRepeatCount() == 0:
+		if getLastScriptRepeatCount() == 0:
 			self.script_reportReviewCursorLocation(gesture)
 		else:
 			self.script_reportCurrentNavigatorObjectLocation(gesture)
@@ -1552,7 +1643,7 @@ class GlobalCommands(ScriptableObject):
 		speakOnDemand=True,
 	)
 	def script_caretPos_currentDimensions(self, gesture):
-		if scriptHandler.getLastScriptRepeatCount() == 0:
+		if getLastScriptRepeatCount() == 0:
 			self.script_reportCaretLocation(gesture)
 		else:
 			self.script_reportFocusObjectLocation(gesture)
@@ -1600,7 +1691,7 @@ class GlobalCommands(ScriptableObject):
 			# 2. Trying to move focus to navigator object but there is no focus.
 			ui.message(_("No focus"))
 
-		if scriptHandler.getLastScriptRepeatCount() == 0:
+		if getLastScriptRepeatCount() == 0:
 			# Translators: Reported when attempting to move focus to navigator object.
 			ui.message(_("Move focus"))
 			# This script is available on the lock screen via getSafeScripts, as such
@@ -1789,7 +1880,7 @@ class GlobalCommands(ScriptableObject):
 			realActionName = actionName
 			try:
 				realActionName = obj.getActionName()
-			except:  # noqa: E722
+			except:  # noqa: E722, S110
 				pass
 			try:
 				obj.doAction()
@@ -1884,7 +1975,7 @@ class GlobalCommands(ScriptableObject):
 		info.expand(textInfos.UNIT_LINE)
 		# Explicitly tether here
 		braille.handler.handleReviewMove(shouldAutoTether=True)
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:
 			speech.speakTextInfo(info, unit=textInfos.UNIT_LINE, reason=controlTypes.OutputReason.CARET)
 		else:
@@ -2083,7 +2174,7 @@ class GlobalCommands(ScriptableObject):
 		info.expand(textInfos.UNIT_WORD)
 		# Explicitly tether here
 		braille.handler.handleReviewMove(shouldAutoTether=True)
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:
 			speech.speakTextInfo(info, reason=controlTypes.OutputReason.CARET, unit=textInfos.UNIT_WORD)
 		else:
@@ -2216,7 +2307,7 @@ class GlobalCommands(ScriptableObject):
 		info.expand(textInfos.UNIT_CHARACTER)
 		# Explicitly tether here
 		braille.handler.handleReviewMove(shouldAutoTether=True)
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:
 			speech.speakTextInfo(info, unit=textInfos.UNIT_CHARACTER, reason=controlTypes.OutputReason.CARET)
 		elif scriptCount == 1:
@@ -2228,13 +2319,13 @@ class GlobalCommands(ScriptableObject):
 				c = None
 			if cList:
 				for c in cList:
-					speech.speakMessage("%d," % c)
+					speech.speakMessage("%d," % c)  # noqa: UP031
 					# Report hex along with decimal only when there is one character; else, it's confusing.
 					if len(cList) == 1:
 						speech.speakSpelling(hex(c))
 				braille.handler.message("; ".join(f"{c}, {hex(c)}" for c in cList))
 			else:
-				log.debugWarning("Couldn't calculate ordinal for character %r" % info.text)
+				log.debugWarning("Couldn't calculate ordinal for character %r" % info.text)  # noqa: UP031
 				speech.speakTextInfo(
 					info,
 					unit=textInfos.UNIT_CHARACTER,
@@ -2392,7 +2483,7 @@ class GlobalCommands(ScriptableObject):
 			# Translators: Reported when there is no replacement for the symbol at the position of the review cursor.
 			ui.message(_("No symbol replacement"))
 			return
-		repeats = scriptHandler.getLastScriptRepeatCount()
+		repeats = getLastScriptRepeatCount()
 		if repeats == 0:
 			ui.message(expandedSymbol)
 		else:
@@ -2428,7 +2519,7 @@ class GlobalCommands(ScriptableObject):
 		# relative ordering of elements for which key function returns the same value is preserved.
 		# Sorting uses `<=` since when sorting booleans they are handled as integers,
 		# so `False` (0) sorts before `True` (1).
-		newModeIndex = sorted(possibleIndexes, key=lambda i: i <= currModeIndex)[0]
+		newModeIndex = sorted(possibleIndexes, key=lambda i: i <= currModeIndex)[0]  # noqa: FURB192
 		newMode = modesList[newModeIndex]
 		speech.cancelSpeech()
 		# Translators: Announced when user switches to another speech mode.
@@ -2479,8 +2570,8 @@ class GlobalCommands(ScriptableObject):
 		if not vbuf:
 			for obj in itertools.chain((api.getFocusObject(),), reversed(api.getFocusAncestors())):
 				try:
-					obj.treeInterceptorClass
-				except:  # noqa: E722
+					obj.treeInterceptorClass  # noqa: B018
+				except:  # noqa: E722, S112
 					continue
 				break
 			else:
@@ -2587,7 +2678,7 @@ class GlobalCommands(ScriptableObject):
 
 		# Create a dictionary to replace the config section that would normally be
 		# passed to getFormatFieldsSpeech / getFormatFieldsBraille
-		formatConfig = dict()
+		formatConfig = dict()  # noqa: C408
 		from config import conf
 
 		for i in conf["documentFormatting"]:
@@ -2597,7 +2688,7 @@ class GlobalCommands(ScriptableObject):
 		# First, fetch indentation.
 		line = info.copy()
 		line.expand(textInfos.UNIT_LINE)
-		indentation, content = speech.splitTextIndentation(line.text)
+		indentation, content = speech.splitTextIndentation(line.text)  # noqa: RUF059
 		if indentation:
 			textList.extend(speech.getIndentationSpeech(indentation, formatConfig))
 
@@ -2644,7 +2735,7 @@ class GlobalCommands(ScriptableObject):
 	def _getTIAtCaret(
 		fallbackToPOSITION_FIRST: bool = False,
 		reportFailure: bool = True,
-	) -> Optional[textInfos.TextInfo]:
+	) -> textInfos.TextInfo | None:
 		# Returns text info at the caret position if there is a caret in the current control, None otherwise.
 		# Note that if there is no caret this fact is announced in speech and braille
 		# unless reportFailure is set to C{False}
@@ -2693,7 +2784,7 @@ class GlobalCommands(ScriptableObject):
 		speakOnDemand=True,
 	)
 	def script_reportFormatting(self, gesture):
-		repeats = scriptHandler.getLastScriptRepeatCount()
+		repeats = getLastScriptRepeatCount()
 		if repeats == 0:
 			self.script_reportFormattingAtReview(gesture)
 		elif repeats == 1:
@@ -2727,13 +2818,13 @@ class GlobalCommands(ScriptableObject):
 		speakOnDemand=True,
 	)
 	def script_reportOrShowFormattingAtCaret(self, gesture):
-		repeats = scriptHandler.getLastScriptRepeatCount()
+		repeats = getLastScriptRepeatCount()
 		if repeats == 0:
 			self.script_reportFormattingAtCaret(gesture)
 		elif repeats == 1:
 			self.script_showFormattingAtCaret(gesture)
 
-	def _getNvdaObjWithAnnotationUnderCaret(self) -> Optional[NVDAObject]:
+	def _getNvdaObjWithAnnotationUnderCaret(self) -> NVDAObject | None:
 		"""If it has an annotation, get the NVDA object for the single character under the caret or the object
 		with system focus.
 		@note: It is tempting to try to report any annotation details that exists in the range formed by prior
@@ -2742,6 +2833,7 @@ class GlobalCommands(ScriptableObject):
 			relation' in that range, and we don't yet have a way for the user to select which one to report.
 			For now, we minimise this risk by only reporting details at the current location.
 		"""
+		_isDebugLogCatEnabled = bool(config.conf["debugLog"]["annotations"])
 		try:
 			# Common cases use Caret Position: vbuf available or object supports text range
 			# Eg editable text, or regular web content
@@ -2749,28 +2841,26 @@ class GlobalCommands(ScriptableObject):
 			caret: textInfos.TextInfo = api.getCaretPosition()
 		except RuntimeError:
 			log.debugWarning("Unable to get the caret position.", exc_info=True)
-			return None
-		caret.expand(textInfos.UNIT_CHARACTER)
-		objAtStart: NVDAObject = caret.NVDAObjectAtStart
-		_isDebugLogCatEnabled = bool(config.conf["debugLog"]["annotations"])
-		if _isDebugLogCatEnabled:
-			log.debug(f"Trying with nvdaObject : {objAtStart}")
-
-		if objAtStart.annotations:
+		else:
+			caret.expand(textInfos.UNIT_CHARACTER)
+			objAtStart: NVDAObject = caret.NVDAObjectAtStart
 			if _isDebugLogCatEnabled:
-				log.debug("NVDAObjectAtStart of caret has details")
-			return objAtStart
-		elif api.getFocusObject():
+				log.debug(f"Trying with nvdaObject : {objAtStart}")
+			if objAtStart.annotations:
+				if _isDebugLogCatEnabled:
+					log.debug("NVDAObjectAtStart of caret has details")
+				return objAtStart
+
+		focus: NVDAObject = api.getFocusObject()
+		if focus:
 			# If fetching from the caret position fails, try via the focus object
 			# This case is to support where there is no virtual buffer or text interface and a caret position can
 			# not be fetched.
 			# There may still be an object with focus that has details.
-			# There isn't a known test case for this, however there isn't a known downside to attempt this.
-			focus = api.getFocusObject()
 			if _isDebugLogCatEnabled:
 				log.debug(f"Trying focus object: {focus}")
 
-			if objAtStart.annotations:
+			if focus.annotations:
 				if _isDebugLogCatEnabled:
 					log.debug("focus object has details, able to proceed")
 				return focus
@@ -2871,7 +2961,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(gui.blockAction.Context.WINDOWS_LOCKED.translatedMessage)
 			return
 
-		repeatCount = scriptHandler.getLastScriptRepeatCount()
+		repeatCount = getLastScriptRepeatCount()
 		if repeatCount == 0:
 			speechList = speech.getObjectSpeech(focusObject, reason=controlTypes.OutputReason.QUERY)
 			speech.speech.speak(speechList)
@@ -2881,7 +2971,7 @@ class GlobalCommands(ScriptableObject):
 			speech.speakSpelling(focusObject.name, useCharacterDescriptions=repeatCount > 1)
 
 	@staticmethod
-	def _getStatusBarText(setReviewCursor: bool = False) -> Optional[str]:
+	def _getStatusBarText(setReviewCursor: bool = False) -> str | None:
 		"""Returns text of the current status bar and optionally sets review cursor to it.
 		If no status bar has been found `None` is returned and this fact is announced in speech and braille.
 		"""
@@ -2895,7 +2985,7 @@ class GlobalCommands(ScriptableObject):
 			and not objectBelowLockScreenAndWindowsIsLocked(obj)
 		):
 			text = api.getStatusBarText(obj)
-			if setReviewCursor:
+			if setReviewCursor:  # noqa: SIM102
 				if not api.setNavigatorObject(obj):
 					return None
 			found = True
@@ -3014,7 +3104,7 @@ class GlobalCommands(ScriptableObject):
 		text = self._getStatusBarText()
 		if text is None:
 			return
-		repeats = scriptHandler.getLastScriptRepeatCount()
+		repeats = getLastScriptRepeatCount()
 		if repeats == 0:
 			self.script_readStatusLine(gesture)
 		elif repeats == 1:
@@ -3123,7 +3213,7 @@ class GlobalCommands(ScriptableObject):
 			if not isinstance(title, str) or not title or title.isspace():
 				# Translators: Reported when there is no title text for current program or window.
 				title = _("No title")
-		repeatCount = scriptHandler.getLastScriptRepeatCount()
+		repeatCount = getLastScriptRepeatCount()
 		if repeatCount == 0:
 			ui.message(title)
 		elif repeatCount == 1:
@@ -3186,7 +3276,7 @@ class GlobalCommands(ScriptableObject):
 		obj = api.getNavigatorObject()
 		if hasattr(obj, "devInfo"):
 			log.info(
-				"Developer info for navigator object:\n%s" % "\n".join(obj.devInfo),
+				"Developer info for navigator object:\n%s" % "\n".join(obj.devInfo),  # noqa: UP031
 				activateLogViewer=True,
 			)
 		else:
@@ -3522,15 +3612,6 @@ class GlobalCommands(ScriptableObject):
 		wx.CallAfter(gui.mainFrame.onRemoteAccessSettingsCommand, None)
 
 	@script(
-		# Translators: Input help mode message for go to local captioner settings command.
-		description=pgettext("imageDesc", "Shows the AI image descriptions settings"),
-		category=SCRCAT_CONFIG,
-	)
-	@gui.blockAction.when(gui.blockAction.Context.MODAL_DIALOG_OPEN)
-	def script_activateLocalCaptionerSettings(self, gesture: "inputCore.InputGesture"):
-		wx.CallAfter(gui.mainFrame.onLocalCaptionerSettingsCommand, None)
-
-	@script(
 		# Translators: Input help mode message for go to Add-on Store settings command.
 		description=_("Shows NVDA's Add-on Store settings"),
 		category=SCRCAT_CONFIG,
@@ -3603,6 +3684,16 @@ class GlobalCommands(ScriptableObject):
 		wx.CallAfter(gui.mainFrame.onInputGesturesCommand, None)
 
 	@script(
+		# Translators: Input help mode message for go to magnifier settings command.
+		description=_("Shows NVDA's magnifier settings"),
+		category=SCRCAT_CONFIG,
+		gesture="kb:NVDA+control+w",
+	)
+	@gui.blockAction.when(gui.blockAction.Context.MODAL_DIALOG_OPEN)
+	def script_activateMagnifierSettingsDialog(self, gesture: inputCore.InputGesture):
+		wx.CallAfter(gui.mainFrame.onMagnifierSettingsCommand, None)
+
+	@script(
 		# Translators: Input help mode message for the report current configuration profile command.
 		description=_("Reports the name of the current NVDA configuration profile"),
 		category=SCRCAT_CONFIG,
@@ -3642,7 +3733,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="kb:NVDA+control+r",
 	)
 	def script_revertConfiguration(self, gesture):
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:
 			gui.mainFrame.onRevertToSavedConfigurationCommand(None)
 		elif scriptCount == 2:
@@ -3751,13 +3842,13 @@ class GlobalCommands(ScriptableObject):
 		# Translators: Input help mode message for toggle braille mode command
 		description=_("Toggles braille mode"),
 		category=SCRCAT_BRAILLE,
-		gesture="kb:nvda+alt+t",
+		gesture="kb:NVDA+alt+t",
 	)
 	def script_toggleBrailleMode(self, gesture: inputCore.InputGesture):
 		curMode = BrailleMode(config.conf["braille"]["mode"])
 		modeList = list(BrailleMode)
 		index = modeList.index(curMode)
-		index = index + 1 if not index == len(modeList) - 1 else 0
+		index = index + 1 if not index == len(modeList) - 1 else 0  # noqa: SIM201
 		newMode = modeList[index]
 		config.conf["braille"]["mode"] = newMode.value
 		if braille.handler.buffer == braille.handler.messageBuffer:
@@ -3822,15 +3913,15 @@ class GlobalCommands(ScriptableObject):
 	)
 	@gui.blockAction.when(gui.blockAction.Context.BRAILLE_MODE_SPEECH_OUTPUT)
 	def script_braille_toggleFocusContextPresentation(self, gesture):
-		values = [x[0] for x in braille.focusContextPresentations]
-		labels = [x[1] for x in braille.focusContextPresentations]
+		values = [x[0] for x in braille.constants.focusContextPresentations]
+		labels = [x[1] for x in braille.constants.focusContextPresentations]
 		try:
 			index = values.index(config.conf["braille"]["focusContextPresentation"])
 		except:  # noqa: E722
 			index = 0
 		newIndex = (index + 1) % len(values)
 		config.conf["braille"]["focusContextPresentation"] = values[newIndex]
-		braille.invalidateCachedFocusAncestors(0)
+		braille.regions.focus.invalidateCachedFocusAncestors(0)
 		braille.handler.handleGainFocus(api.getFocusObject())
 		# Translators: Reports the new state of braille focus context presentation.
 		# %s will be replaced with the context presentation setting.
@@ -3899,7 +3990,7 @@ class GlobalCommands(ScriptableObject):
 			# Translators: A message reported when changing the braille cursor shape when the braille cursor is turned off.
 			ui.message(_("Braille cursor is turned off"))
 			return
-		shapes = [s[0] for s in braille.CURSOR_SHAPES]
+		shapes = [s[0] for s in braille.constants.CURSOR_SHAPES]
 		if braille.handler.getTether() == TetherTo.FOCUS.value:
 			cursorShape = "cursorShapeFocus"
 		else:
@@ -3908,10 +3999,10 @@ class GlobalCommands(ScriptableObject):
 			index = shapes.index(config.conf["braille"][cursorShape]) + 1
 		except:  # noqa: E722
 			index = 1
-		if index >= len(braille.CURSOR_SHAPES):
+		if index >= len(braille.constants.CURSOR_SHAPES):
 			index = 0
-		config.conf["braille"][cursorShape] = braille.CURSOR_SHAPES[index][0]
-		shapeMsg = braille.CURSOR_SHAPES[index][1]
+		config.conf["braille"][cursorShape] = braille.constants.CURSOR_SHAPES[index][0]
+		shapeMsg = braille.constants.CURSOR_SHAPES[index][1]
 		# Translators: Reports which braille cursor shape is activated.
 		ui.message(_("Braille cursor %s") % shapeMsg)
 
@@ -4011,7 +4102,7 @@ class GlobalCommands(ScriptableObject):
 			return
 		textLength = len(text)
 		if textLength < 1024:
-			repeatCount = scriptHandler.getLastScriptRepeatCount()
+			repeatCount = getLastScriptRepeatCount()
 			if repeatCount == 0:
 				ui.message(text)
 			else:
@@ -4038,13 +4129,12 @@ class GlobalCommands(ScriptableObject):
 		category=SCRCAT_TEXTREVIEW,
 		gesture="kb:NVDA+f9",
 	)
-	def script_review_markStartForCopy(self, gesture):
+	def script_review_markStartForCopy(self, gesture: inputCore.InputGesture) -> None:
 		reviewPos = api.getReviewPosition()
-		# attach the marker to obj so that the marker is cleaned up when obj is cleaned up.
-		reviewPos.obj._copyStartMarker = reviewPos.copy()  # represents the start location
-		reviewPos.obj._selectThenCopyRange = (
-			None  # we may be part way through a select, reset the copy range.
-		)
+		self._reviewCopyStartMarker = reviewPos.copy()
+		self._reviewCopyStartMarkerObj = reviewPos.obj
+		# We may be part way through a select, reset the copy range.
+		self._reviewSelectThenCopyRange = None
 		# Translators: Indicates start of review cursor text to be copied to clipboard.
 		ui.message(_("Start marked"))
 
@@ -4057,13 +4147,13 @@ class GlobalCommands(ScriptableObject):
 		category=SCRCAT_TEXTREVIEW,
 		gesture="kb:NVDA+shift+F9",
 	)
-	def script_review_moveToStartMarkedForCopy(self, gesture: inputCore.InputGesture):
-		pos = api.getReviewPosition()
-		if not getattr(pos.obj, "_copyStartMarker", None):
+	def script_review_moveToStartMarkedForCopy(self, gesture: inputCore.InputGesture) -> None:
+		startMarker = self._getReviewCopyStartMarker(api.getReviewPosition())
+		if not startMarker:
 			# Translators: Presented when attempting to move to the start marker for copy but none has been set.
 			ui.reviewMessage(_("No start marker set"))
 			return
-		startMarker = pos.obj._copyStartMarker.copy()
+		startMarker = startMarker.copy()
 		# This script is available on the lock screen via getSafeScripts,
 		# as such observe the setReviewPosition result to ensure
 		# the review position does not contain secure information
@@ -4090,16 +4180,16 @@ class GlobalCommands(ScriptableObject):
 		category=SCRCAT_TEXTREVIEW,
 		gesture="kb:NVDA+f10",
 	)
-	def script_review_copy(self, gesture):
+	def script_review_copy(self, gesture: inputCore.InputGesture) -> None:
 		pos = api.getReviewPosition().copy()
-		if not getattr(pos.obj, "_copyStartMarker", None):
+		startMarker = self._getReviewCopyStartMarker(pos)
+		if not startMarker:
 			# Translators: Presented when attempting to copy some review cursor text but there is no start marker.
 			ui.message(_("No start marker set"))
 			return
-		startMarker = api.getReviewPosition().obj._copyStartMarker
 		# first call, try to set the selection.
-		if scriptHandler.getLastScriptRepeatCount() == 0:
-			if getattr(pos.obj, "_selectThenCopyRange", None):
+		if getLastScriptRepeatCount() == 0:
+			if self._reviewSelectThenCopyRange:
 				# we have already tried selecting the text, dont try again. For now selections can not be ammended.
 				# Translators: Presented when text has already been marked for selection, but not yet copied.
 				ui.message(_("Press twice to copy or reset the start marker"))
@@ -4122,36 +4212,38 @@ class GlobalCommands(ScriptableObject):
 			if copyMarker.compareEndPoints(copyMarker, "startToEnd") == 0:
 				# Translators: Presented when there is no text selection to copy from review cursor.
 				ui.message(_("No text to copy"))
-				api.getReviewPosition().obj._copyStartMarker = None
+				self._clearReviewCopyStartMarker()
 				return
-			api.getReviewPosition().obj._selectThenCopyRange = copyMarker
+			self._reviewSelectThenCopyRange = copyMarker
 			# for applications such as word, where the selected text is not automatically spoken we must monitor it ourself
 			try:
 				# old selection info must be saved so that its possible to report on the changes to the selection.
 				oldInfo = pos.obj.makeTextInfo(textInfos.POSITION_SELECTION)
-			except Exception as e:
-				log.debug("Error trying to get initial selection information %s" % e)
-				pass
+			except Exception as e:  # noqa: BLE001
+				log.debug("Error trying to get initial selection information %s" % e)  # noqa: UP031
 			try:
 				copyMarker.updateSelection()
 				if hasattr(pos.obj, "reportSelectionChange"):
 					# wait for applications such as word to update their selection so that we can detect it
 					try:
 						pos.obj.reportSelectionChange(oldInfo)
-					except Exception as e:
-						log.debug("Error trying to report the updated selection: %s" % e)
+					except Exception as e:  # noqa: BLE001
+						log.debug("Error trying to report the updated selection: %s" % e)  # noqa: UP031
 			except NotImplementedError as e:
 				# we are unable to select the text, leave the _copyStartMarker in place in case the user wishes to copy the text.
 				# Translators: Presented when unable to select the marked text.
 				ui.message(_("Can't select text, press twice to copy"))
-				log.debug("Error trying to update selection: %s" % e)
+				log.debug("Error trying to update selection: %s" % e)  # noqa: UP031
 				return
-		elif scriptHandler.getLastScriptRepeatCount() == 1:  # the second call, try to copy the text
-			copyMarker = pos.obj._selectThenCopyRange
+		elif getLastScriptRepeatCount() == 1:  # the second call, try to copy the text
+			copyMarker = self._reviewSelectThenCopyRange
+			if copyMarker is None:
+				# Translators: Presented when attempting to copy some review cursor text but there is no start marker.
+				ui.message(_("No start marker set"))
+				return
 			copyMarker.copyToClipboard(notify=True)
 			# on the second call always clean up the start marker
-			api.getReviewPosition().obj._selectThenCopyRange = None
-			api.getReviewPosition().obj._copyStartMarker = None
+			self._clearReviewCopyStartMarker()
 		return
 
 	@script(
@@ -4177,21 +4269,48 @@ class GlobalCommands(ScriptableObject):
 		description=_("Routes the cursor to or activates the object under this braille cell"),
 		category=SCRCAT_BRAILLE,
 	)
-	def script_braille_routeTo(self, gesture):
-		braille.handler.routeTo(gesture.routingIndex)
+	def script_braille_routeTo(self, gesture: braille.display.gesture.BrailleDisplayGesture):
+		if not gesture.cellIndexes:
+			return
+		braille.handler.routeTo(gesture.cellIndexes[0])
 
 	@script(
 		# Translators: Input help mode message for Braille report formatting command.
 		description=_("Reports formatting info for the text under this braille cell"),
 		category=SCRCAT_BRAILLE,
 	)
-	def script_braille_reportFormatting(self, gesture):
-		info = braille.handler.getTextInfoForWindowPos(gesture.routingIndex)
+	def script_braille_reportFormatting(self, gesture: braille.display.gesture.BrailleDisplayGesture):
+		if not gesture.cellIndexes:
+			return
+		info = braille.handler.getTextInfoForWindowPos(gesture.cellIndexes[0])
 		if info is None:
 			# Translators: Reported when trying to obtain formatting information (such as font name, indentation and so on) but there is no formatting information for the text under cursor.
 			ui.message(_("No formatting information"))
 			return
 		self._reportFormattingHelper(info, False)
+
+	@script(
+		# Translators: Input help mode message for a braille command.
+		description=_("Selects the text from the first up to the last braille cell"),
+		category=SCRCAT_BRAILLE,
+	)
+	def script_braille_selectRange(self, gesture: braille.display.gesture.BrailleDisplayGesture):
+		if not gesture.cellIndexes or len(gesture.cellIndexes) < 2:
+			return
+		startPos = min(gesture.cellIndexes)
+		endPos = max(gesture.cellIndexes)
+		startInfo = braille.handler.getTextInfoForWindowPos(startPos)
+		endInfo = braille.handler.getTextInfoForWindowPos(endPos)
+		if startInfo is None or endInfo is None:
+			# Translators: Reported when selection via multiple routing keys is not possible.
+			ui.message(_("Cannot select from braille routing keys"))
+			return
+		startInfo.setEndPoint(endInfo, "endToEnd")
+		try:
+			startInfo.updateSelection()
+		except NotImplementedError:
+			# Translators: Reported when selection via multiple routing keys is not supported by the focused control.
+			ui.message(_("Selection not supported here"))
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4218,7 +4337,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="bk:dots",
 	)
 	def script_braille_dots(self, gesture):
-		brailleInput.handler.input(gesture.dots)
+		braille.input.handler.input(gesture.dots)
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4249,7 +4368,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="bk:dot7",
 	)
 	def script_braille_eraseLastCell(self, gesture):
-		brailleInput.handler.eraseLastCell()
+		braille.input.handler.eraseLastCell()
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4258,7 +4377,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="bk:dot8",
 	)
 	def script_braille_enter(self, gesture):
-		brailleInput.handler.enter()
+		braille.input.handler.enter()
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4267,7 +4386,7 @@ class GlobalCommands(ScriptableObject):
 		gesture="bk:dot7+dot8",
 	)
 	def script_braille_translate(self, gesture):
-		brailleInput.handler.translate()
+		braille.input.handler.translate()
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4276,7 +4395,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleShift(self, gesture):
-		brailleInput.handler.toggleModifier("shift")
+		braille.input.handler.toggleModifier("shift")
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4285,7 +4404,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleControl(self, gesture):
-		brailleInput.handler.toggleModifier("control")
+		braille.input.handler.toggleModifier("control")
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4294,7 +4413,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleAlt(self, gesture):
-		brailleInput.handler.toggleModifier("alt")
+		braille.input.handler.toggleModifier("alt")
 
 	@script(
 		description=_(
@@ -4305,7 +4424,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleWindows(self, gesture):
-		brailleInput.handler.toggleModifier("leftWindows")
+		braille.input.handler.toggleModifier("leftWindows")
 
 	@script(
 		# Translators: Input help mode message for a braille command.
@@ -4314,7 +4433,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleNVDAKey(self, gesture):
-		brailleInput.handler.toggleModifier("NVDA")
+		braille.input.handler.toggleModifier("NVDA")
 
 	@script(
 		description=_(
@@ -4325,7 +4444,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleControlShift(self, gesture):
-		brailleInput.handler.toggleModifiers(["control", "shift"])
+		braille.input.handler.toggleModifiers(["control", "shift"])
 
 	@script(
 		description=_(
@@ -4336,7 +4455,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleAltShift(self, gesture):
-		brailleInput.handler.toggleModifiers(["alt", "shift"])
+		braille.input.handler.toggleModifiers(["alt", "shift"])
 
 	@script(
 		description=_(
@@ -4348,7 +4467,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleWindowsShift(self, gesture):
-		brailleInput.handler.toggleModifiers(["leftWindows", "shift"])
+		braille.input.handler.toggleModifiers(["leftWindows", "shift"])
 
 	@script(
 		description=_(
@@ -4359,7 +4478,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleNVDAKeyShift(self, gesture):
-		brailleInput.handler.toggleModifiers(["NVDA", "shift"])
+		braille.input.handler.toggleModifiers(["NVDA", "shift"])
 
 	@script(
 		description=_(
@@ -4370,7 +4489,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleControlAlt(self, gesture):
-		brailleInput.handler.toggleModifiers(["control", "alt"])
+		braille.input.handler.toggleModifiers(["control", "alt"])
 
 	@script(
 		description=_(
@@ -4382,7 +4501,7 @@ class GlobalCommands(ScriptableObject):
 		bypassInputHelp=True,
 	)
 	def script_braille_toggleControlAltShift(self, gesture):
-		brailleInput.handler.toggleModifiers(["control", "alt", "shift"])
+		braille.input.handler.toggleModifiers(["control", "alt", "shift"])
 
 	@script(
 		description=_(
@@ -4430,7 +4549,7 @@ class GlobalCommands(ScriptableObject):
 				link = None
 		else:
 			link = ti._getLinkDataAtCaretPosition()
-		presses = scriptHandler.getLastScriptRepeatCount()
+		presses = getLastScriptRepeatCount()
 		if link:
 			if not link.destination:  # May be None or ""
 				# Translators: Reported when using the command to report the destination of a link.
@@ -4583,12 +4702,8 @@ class GlobalCommands(ScriptableObject):
 		index = (index + 1) % len(touchHandler.availableTouchModes)
 		newMode = touchHandler.availableTouchModes[index]
 		touchHandler.handler._curTouchMode = newMode
-		try:
-			newModeLabel = touchHandler.touchModeLabels[newMode]
-		except KeyError:
-			# Translators: Cycles through available touch modes (a group of related touch gestures; example output: "object mode"; see the user guide for more information on touch modes).
-			newModeLabel = _("%s mode") % newMode
-		ui.message(newModeLabel)
+		modeLabel = newMode.displayString if isinstance(newMode, touchHandler.TouchMode) else newMode
+		ui.message(modeLabel)
 
 	@script(
 		# Translators: Input help mode message for a touchscreen gesture.
@@ -4697,25 +4812,34 @@ class GlobalCommands(ScriptableObject):
 	@script(
 		# Translators: Describes a command.
 		description=_("Begins interaction with math content"),
+		category=SCRCAT_MATH_NAV,
 		gesture="kb:NVDA+alt+m",
 	)
 	def script_interactWithMath(self, gesture):
 		import mathPres
 
-		mathMl = mathPres.getMathMlFromTextInfo(api.getReviewPosition())
+		reviewPosition = api.getReviewPosition()
+		mathMl = mathPres.getMathMlFromTextInfo(reviewPosition)
+		sourceObj = None
 		if not mathMl:
 			obj = api.getNavigatorObject()
 			if obj.role == controlTypes.Role.MATH:
 				try:
 					mathMl = obj.mathMl
+					sourceObj = obj
 				except (NotImplementedError, LookupError):
 					mathMl = None
+		else:
+			try:
+				sourceObj = reviewPosition.NVDAObjectAtStart
+			except (NotImplementedError, LookupError):
+				pass
 		if not mathMl:
 			# Translators: Reported when the user attempts math interaction
 			# with something that isn't math.
 			ui.message(_("Not math"))
 			return
-		mathPres.interactWithMathMl(mathMl)
+		mathPres.interactWithMathMl(mathMl, sourceObj=sourceObj)
 
 	@script(
 		# Translators: Describes a command.
@@ -4727,14 +4851,7 @@ class GlobalCommands(ScriptableObject):
 			# Translators: Reported when Windows OCR is not available.
 			ui.message(_("Windows OCR not available"))
 			return
-		from screenCurtain import screenCurtain
-
-		isScreenCurtainRunning = screenCurtain is not None and screenCurtain.enabled
-		if isScreenCurtainRunning:
-			# Translators: Reported when screen curtain is enabled.
-			ui.message(_("Please disable screen curtain before using Windows OCR."))
-			return
-		from contentRecog import uwpOcr, recogUi
+		from contentRecog import uwpOcr, recogUi  # noqa: I001
 
 		recog = uwpOcr.UwpOcr()
 		recogUi.recognizeNavigatorObject(recog)
@@ -4844,7 +4961,6 @@ class GlobalCommands(ScriptableObject):
 			"Pressed once, screen curtain is enabled until you restart NVDA. "
 			"Pressed twice, screen curtain is enabled until you disable it",
 		),
-		category=SCRCAT_VISION,
 		gesture="kb:NVDA+control+escape",
 	)
 	def script_toggleScreenCurtain(self, gesture: inputCore.InputGesture) -> None:
@@ -4856,7 +4972,7 @@ class GlobalCommands(ScriptableObject):
 			ui.message(_("Screen curtain not available"), speechPriority=speech.priorities.Spri.NOW)
 			return
 
-		scriptCount = scriptHandler.getLastScriptRepeatCount()
+		scriptCount = getLastScriptRepeatCount()
 		if scriptCount == 0:  # first call should reset last message
 			self._toggleScreenCurtainMessage = None
 		alreadyRunning = screenCurtain.screenCurtain.enabled
@@ -4904,13 +5020,13 @@ class GlobalCommands(ScriptableObject):
 				screenCurtain.screenCurtain.disable()
 			except Exception:
 				# If the screen curtain was enabled, we do not expect exceptions.
-				log.error("Screen curtain termination error", exc_info=True)
+				log.error("Screen curtain termination error", exc_info=True)  # noqa: G201
 				# Translators: Reported when the screen curtain could not be enabled.
 				message = _("Could not disable screen curtain")
 			finally:
 				self._toggleScreenCurtainMessage = message
 				ui.message(message, speechPriority=speech.priorities.Spri.NOW)
-				return
+				return  # noqa: B012
 		elif (  # enable it
 			scriptCount in (0, 1)  # 1 press (temp enable) or 2 presses (enable)
 		):
@@ -4919,7 +5035,14 @@ class GlobalCommands(ScriptableObject):
 				self._waitingOnScreenCurtainWarningDialog = None
 				if not doEnable:
 					return  # exit early with no ui.message because the user has decided to abort.
+				from contentRecog import recogUi
 
+				if recogUi._shouldBlockScreenCurtainEnable(focusObj):
+					ui.message(
+						screenCurtain._screenCurtain.UNAVAILABLE_WHEN_RECOGNISING_CONTENT_MESSAGE,
+						speechPriority=speech.priorities.Spri.NOW,
+					)
+					return
 				tempEnable = GlobalCommands._tempEnableScreenCurtain
 				# Translators: Reported when the screen curtain is enabled.
 				enableMessage = _("Screen curtain enabled")
@@ -4933,7 +5056,7 @@ class GlobalCommands(ScriptableObject):
 					else:
 						screenCurtain.screenCurtain.enable(persist=not tempEnable)
 				except Exception:
-					log.error("Screen curtain initialization error", exc_info=True)
+					log.error("Screen curtain initialization error", exc_info=True)  # noqa: G201
 					enableMessage = screenCurtain._screenCurtain.ERROR_ENABLING_MESSAGE
 				finally:
 					self._toggleScreenCurtainMessage = enableMessage
@@ -4941,6 +5064,7 @@ class GlobalCommands(ScriptableObject):
 
 			#  Show warning if necessary and do enable.
 			settingsStorage = screenCurtain.screenCurtain.settings
+			focusObj = api.getFocusObject()
 			if settingsStorage["warnOnLoad"]:
 				dlg = screenCurtain._screenCurtain.WarnOnLoadDialog(
 					screenCurtainSettingsStorage=settingsStorage,
@@ -4956,19 +5080,310 @@ class GlobalCommands(ScriptableObject):
 					),
 				)
 			else:
-				from contentRecog.recogUi import RefreshableRecogResultNVDAObject
-
-				focusObj = api.getFocusObject()
-				if (
-					isinstance(focusObj, RefreshableRecogResultNVDAObject)
-					and focusObj.recognizer.allowAutoRefresh
-				):
-					ui.message(
-						screenCurtain._screenCurtain.UNAVAILABLE_WHEN_RECOGNISING_CONTENT_MESSAGE,
-						speechPriority=speech.priorities.Spri.NOW,
-					)
-					return
 				_enableScreenCurtain()
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Reports the state of the screen curtain.",
+		),
+		speakOnDemand=True,
+	)
+	def script_reportScreenCurtainState(self, gesture: inputCore.InputGesture) -> None:
+		import screenCurtain
+
+		if screenCurtain.screenCurtain is None:
+			# Screen curtain has not been initialized.
+			# Translators: Reported when the screen curtain is not available.
+			ui.message(_("Screen curtain not available"), speechPriority=speech.priorities.Spri.NOW)
+			return
+
+		if screenCurtain.screenCurtain.enabled:
+			if not screenCurtain.screenCurtain.settings["enabled"]:
+				# Translators: Reported when the screen curtain is temporarily enabled.
+				ui.message(
+					_("Temporary Screen curtain, enabled until next restart"),
+					speechPriority=speech.priorities.Spri.NOW,
+				)
+			else:
+				# Translators: Reported when the screen curtain is enabled.
+				ui.message(_("Screen curtain enabled"), speechPriority=speech.priorities.Spri.NOW)
+		else:
+			# Translators: Reported when the screen curtain is disabled.
+			ui.message(_("Screen curtain disabled"), speechPriority=speech.priorities.Spri.NOW)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle the magnifier on and off",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:NVDA+shift+w",
+	)
+	def script_toggleMagnifier(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleMagnifier()
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Increase the magnification level",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:NVDA+shift+=",
+	)
+	def script_zoomIn(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.zoom(_magnifier.commands.Direction.IN)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Decrease the magnification level",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:NVDA+shift+-",
+	)
+	def script_zoomOut(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.zoom(_magnifier.commands.Direction.OUT)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view left",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+alt+leftArrow",
+	)
+	def script_panLeft(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_LEFT)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view right",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+alt+rightArrow",
+	)
+	def script_panRight(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_RIGHT)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view up",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+alt+upArrow",
+	)
+	def script_panUp(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_UP)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view down",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+alt+downArrow",
+	)
+	def script_panDown(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_DOWN)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view to left edge",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+shift+alt+leftArrow",
+	)
+	def script_panToLeftEdge(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_LEFT_EDGE)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view to right edge",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+shift+alt+rightArrow",
+	)
+	def script_panToRightEdge(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_RIGHT_EDGE)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view to top edge",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+shift+alt+upArrow",
+	)
+	def script_panToTopEdge(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_TOP_EDGE)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Pan the magnified view to bottom edge",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:nvda+shift+alt+downArrow",
+	)
+	def script_panToBottomEdge(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.pan(_magnifier.commands.MagnifierAction.PAN_BOTTOM_EDGE)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Moves the mouse cursor to the center of the magnified view",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_moveMouseToView(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.moveMouseToView()
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Cycle through the color filters",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:NVDA+shift+i",
+	)
+	def script_cycleFilters(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFilter()
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle magnifier mouse tracking",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_toggleFollowMouse(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFollow(MagnifierTrackingType.MOUSE)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle magnifier system focus tracking",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_toggleFollowSystemFocus(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFollow(MagnifierTrackingType.SYSTEM_FOCUS)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle magnifier review cursor tracking",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_toggleFollowReview(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFollow(MagnifierTrackingType.REVIEW)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle magnifier navigator object tracking",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_toggleFollowNavigatorObject(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFollow(MagnifierTrackingType.NAVIGATOR_OBJECT)
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Toggle all magnifier tracking settings",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_toggleAllFollow(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleAllFollow()
+
+	@script(
+		description=_(
+			# Translators: Describes a command.
+			"Cycle through tracking modes",
+		),
+		category=SCRCAT_MAGNIFIER,
+	)
+	def script_cycleTrackingModes(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.toggleFullscreenMode()
+
+	@script(
+		description=_(
+			# Translators: Describe a command.
+			"Temporarily show an overview of the entire screen",
+		),
+		category=SCRCAT_MAGNIFIER,
+		gesture="kb:NVDA+shift+l",
+	)
+	def script_showEntireScreenOverview(
+		self,
+		gesture: inputCore.InputGesture,
+	) -> None:
+		_magnifier.commands.startSpotlight()
 
 	@script(
 		description=_(
@@ -5029,7 +5444,7 @@ class GlobalCommands(ScriptableObject):
 			).format(
 				languageDescription=languageDescription,
 			)
-		repeats = scriptHandler.getLastScriptRepeatCount()
+		repeats = getLastScriptRepeatCount()
 		if repeats == 0:
 			ui.message(message)
 		elif repeats == 1:
@@ -5133,33 +5548,9 @@ class GlobalCommands(ScriptableObject):
 		_remoteClient._remoteClient.sendSAS()
 
 	@script(
-		description=pgettext(
-			"imageDesc",
-			# Translators: Description for the image caption script
-			"Get an AI-generated image description of the navigator object.",
-		),
-		category=SCRCAT_IMAGE_DESC,
-		gesture="kb:NVDA+g",
-	)
-	@gui.blockAction.when(gui.blockAction.Context.SCREEN_CURTAIN)
-	def script_runCaption(self, gesture: "inputCore.InputGesture"):
-		_localCaptioner._localCaptioner.runCaption(gesture)
-
-	@script(
-		description=pgettext(
-			"imageDesc",
-			# Translators: Description for the toggle image captioning script
-			"Load or unload the image captioner",
-		),
-		category=SCRCAT_IMAGE_DESC,
-	)
-	def script_toggleImageCaptioning(self, gesture: "inputCore.InputGesture"):
-		_localCaptioner._localCaptioner.toggleImageCaptioning(gesture)
-
-	@script(
 		description=_(
 			# Translators: Description for the repeat last speech script
-			"Repeat the last spoken information. Pressing twice shows it in a browsable message. ",
+			"Repeat the last spoken information. Pressing twice shows it in a browsable message.",
 		),
 		gesture="kb:NVDA+x",
 		category=SCRCAT_SPEECH,
@@ -5170,8 +5561,8 @@ class GlobalCommands(ScriptableObject):
 		if lastSpeech is None:
 			return
 		lastSpeechSeq, symbolLevel = lastSpeech
-		repeats = scriptHandler.getLastScriptRepeatCount()
-		lastSpeechText = "  ".join(i for i in lastSpeechSeq if isinstance(i, str))
+		repeats = getLastScriptRepeatCount()
+		lastSpeechText = CHUNK_SEPARATOR.join(i for i in lastSpeechSeq if isinstance(i, str))
 		if repeats == 0:
 			speech.speak(lastSpeechSeq, symbolLevel=symbolLevel)
 			braille.handler.message(lastSpeechText)
@@ -5179,6 +5570,23 @@ class GlobalCommands(ScriptableObject):
 			# Translators: title for report last spoken information dialog.
 			title = _("Last spoken information")
 			ui.browseableMessage(lastSpeechText, title, copyButton=True, closeButton=True)
+
+	@script(
+		description=_(
+			# Translators: Input help mode message for the command to copy the last spoken information.
+			"Copies the last spoken information to the clipboard.",
+		),
+		gesture="kb:NVDA+control+x",
+		category=SCRCAT_SPEECH,
+	)
+	def script_copyLastSpokenInformation(self, gesture: "inputCore.InputGesture") -> None:
+		lastSpeech = speech.speech._lastSpeech
+		if lastSpeech is None:
+			# Translators: Reported when there is no last spoken information to copy.
+			ui.message(_("Nothing to copy"))
+			return
+		lastSpeechText = CHUNK_SEPARATOR.join(item for item in lastSpeech[0] if isinstance(item, str))
+		api.copyToClip(lastSpeechText, notify=True)
 
 
 #: The single global commands instance.
@@ -5196,7 +5604,7 @@ class ConfigProfileActivationCommands(ScriptableObject):
 		# Iterate through the available profiles, creating scripts for them.
 		for profile in config.conf.listProfiles():
 			cls.addScriptForProfile(profile)
-		return super(ConfigProfileActivationCommands, cls).__new__(cls)
+		return super().__new__(cls)
 
 	@classmethod
 	def _getScriptNameForProfile(cls, name):
@@ -5206,7 +5614,7 @@ class ConfigProfileActivationCommands(ScriptableObject):
 				invalidChars.add(c)
 		for c in invalidChars:
 			name = name.replace(c, b16encode(c.encode()).decode("ascii"))
-		return "profile_%s" % name
+		return "profile_%s" % name  # noqa: UP031
 
 	@classmethod
 	def _profileScript(cls, name):
@@ -5233,8 +5641,8 @@ class ConfigProfileActivationCommands(ScriptableObject):
 		@param name: The name of the profile to add a script for.
 		@type name: str
 		"""
-		script = lambda self, gesture: cls._profileScript(name)  # noqa: E731
-		funcName = script.__name__ = "script_%s" % cls._getScriptNameForProfile(name)
+		script = lambda self, gesture: cls._profileScript(name)
+		funcName = script.__name__ = "script_%s" % cls._getScriptNameForProfile(name)  # noqa: UP031
 		# Just set the doc string of the script, using the decorator is overkill here.
 		# Translators: The description shown in input help for a script that
 		# activates or deactivates a config profile.
@@ -5252,7 +5660,7 @@ class ConfigProfileActivationCommands(ScriptableObject):
 		"""
 		scriptName = cls._getScriptNameForProfile(name)
 		cls._moveGesturesForProfileActivationScript(scriptName)
-		delattr(cls, "script_%s" % scriptName)
+		delattr(cls, "script_%s" % scriptName)  # noqa: UP031
 
 	@classmethod
 	def _moveGesturesForProfileActivationScript(cls, oldScriptName, newScriptName=None):
@@ -5290,7 +5698,7 @@ class ConfigProfileActivationCommands(ScriptableObject):
 		oldScriptName = cls._getScriptNameForProfile(oldName)
 		newScriptName = cls._getScriptNameForProfile(newName)
 		cls._moveGesturesForProfileActivationScript(oldScriptName, newScriptName)
-		delattr(cls, "script_%s" % oldScriptName)
+		delattr(cls, "script_%s" % oldScriptName)  # noqa: UP031
 		cls.addScriptForProfile(newName)
 
 

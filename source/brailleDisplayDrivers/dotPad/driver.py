@@ -1,10 +1,10 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2024-2025 NV Access Limited, Dot Incorporated, Bram Duvigneau
-# This file is covered by the GNU General Public License.
-# See the file COPYING for more details.
+# Copyright (C) 2024-2026 NV Access Limited, Dot Incorporated, Bram Duvigneau
+# This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
+# For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
 
-import struct
+import struct  # noqa: I001
 import functools
 import operator
 import enum
@@ -12,6 +12,9 @@ from dataclasses import dataclass
 import serial
 import inputCore
 import braille
+import braille.display
+import braille.display.driver
+import braille.display.gesture
 import winBindings.kernel32
 import hwIo
 import bdDetect
@@ -24,11 +27,14 @@ from .defs import (
 	DP_Command,
 	DP_DisplayResponse,
 	DP_Features,
+	DP_MAX_PACKET_SIZE,
+	DP_MIN_PACKET_SIZE,
 	DP_PacketSeqFlag,
 	DP_PacketSyncByte,
 	DP_PerkinsKey,
 	DP_BoardInformation,
 	DP_CHECKSUM_BASE,
+	DP_KeyGroup,
 )
 
 
@@ -71,7 +77,7 @@ class BrailleDestination(enum.StrEnum):
 	GRAPHIC = "graphic"
 
 
-class BrailleDisplayDriver(braille.BrailleDisplayDriver):
+class BrailleDisplayDriver(braille.display.driver.BrailleDisplayDriver):
 	"""
 	Driver for DotPad Braille / Tactile Graphic display.
 	"""
@@ -94,7 +100,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 
 	@classmethod
 	def getManualPorts(cls):
-		return braille.getSerialPorts()
+		return braille.display.getSerialPorts()
 
 	@classmethod
 	def registerAutomaticDetection(cls, driverRegistrar: bdDetect.DriverRegistrar):
@@ -105,7 +111,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 			},
 		)
 
-	supportedSettings = [
+	supportedSettings = [  # noqa: RUF012
 		DriverSetting(
 			"brailleDestination",
 			# Translators: Label for a setting that allows the user to choose the destination for braille output.
@@ -114,7 +120,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		),
 	]
 
-	_lastResponse: dict[int, CommandResponse] = {}
+	_lastResponse: dict[int, CommandResponse] = {}  # noqa: RUF012
 
 	def _sendCommand(
 		self,
@@ -157,20 +163,63 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 			return response.data
 		return b""
 
-	def _onReceive(self, header1: bytes):
-		if ord(header1) != DP_PacketSyncByte.SYNC1:
-			raise RuntimeError(f"Bad {header1=}")
-		header2 = self._dev.read(1)
-		if ord(header2) != DP_PacketSyncByte.SYNC2:
-			raise RuntimeError(f"bad {header2=}")
-		length = struct.unpack(">H", self._dev.read(2))[0]
-		packetBody = self._dev.read(length)
-		dest, cmdHigh, cmdLow, seqNum, *data, checksum = packetBody
+	def _onReceive(self, data: bytes) -> None:
+		"""Handle received data from either Serial (1 byte) or BLE (full packets).
+
+		Buffers incoming data and extracts complete packets as they arrive.
+		Works with both byte-at-a-time delivery (Serial) and packet-based
+		delivery (BLE).
+
+		:param data: Received data (1 byte for Serial, variable length for BLE).
+		"""
+		self._receiveBuffer.extend(data)
+
+		while len(self._receiveBuffer) >= 4:
+			if self._receiveBuffer[0] != DP_PacketSyncByte.SYNC1:
+				log.debug(f"Bad first sync byte: 0x{self._receiveBuffer[0]:02x}, discarding")
+				self._receiveBuffer.pop(0)
+				continue
+
+			if self._receiveBuffer[1] != DP_PacketSyncByte.SYNC2:
+				log.debug(f"Bad second sync byte: 0x{self._receiveBuffer[1]:02x}, discarding")
+				self._receiveBuffer.pop(0)
+				continue
+
+			packetLength = struct.unpack(">H", bytes(self._receiveBuffer[2:4]))[0]
+			totalLength = 4 + packetLength
+
+			# Real DotPad packets fall within a narrow size range. A declared length
+			# outside the plausible bounds means we locked onto a false header (line
+			# noise or desync): discard one byte and resync rather than stalling on a
+			# huge bogus length or trying to unpack a runt packet.
+			if not DP_MIN_PACKET_SIZE <= totalLength <= DP_MAX_PACKET_SIZE:
+				log.debug(f"Implausible length {packetLength}, resyncing")
+				self._receiveBuffer.pop(0)
+				continue
+
+			if len(self._receiveBuffer) < totalLength:
+				break
+
+			packet = bytes(self._receiveBuffer[:totalLength])
+			self._receiveBuffer = self._receiveBuffer[totalLength:]
+
+			try:
+				self._processPacket(packet[4:])
+			except (RuntimeError, ValueError, struct.error):
+				log.exception("Error processing packet")
+
+	def _processPacket(self, packetBody: bytes) -> None:
+		"""Process a complete packet body (after sync bytes and length header).
+
+		:param packetBody: The packet body containing dest, command, sequence,
+			data, and checksum.
+		"""
+		dest, cmdFirstByte, cmdSecondByte, seqNum, *data, checksum = packetBody
 		data = bytes(data)
 		if checksum != functools.reduce(operator.xor, packetBody[:-1], DP_CHECKSUM_BASE):
 			raise RuntimeError("bad checksum")
-		cmd = DP_Command(struct.unpack(">H", bytes([cmdHigh, cmdLow]))[0])
-		log.debug(f"Received responce  {cmd.name}, {dest=}, {seqNum=}, data={bytes(data)}")
+		cmd = DP_Command(struct.unpack(">H", bytes([cmdFirstByte, cmdSecondByte]))[0])
+		log.debug(f"Received response {cmd.name}, {dest=}, {seqNum=}, data={bytes(data)}")
 		if cmd.name.startswith("RSP_"):
 			self._recordCommandResponse(cmd, data, dest, seqNum)
 		elif cmd.name.startswith("NTF_"):
@@ -187,7 +236,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		data = self._sendCommand(DP_Command.REQ_BOARD_INFORMATION, rspCmd=DP_Command.RSP_BOARD_INFORMATION)
 		return DP_BoardInformation.from_buffer_copy(data)
 
-	_displayLineCache: dict[int, bytes] = {}
+	_displayLineCache: dict[int, bytes] = {}  # noqa: RUF012
 
 	def _requestDisplayLine(self, dest: int, data: bytes, seqNum: int = 0):
 		oldData = self._displayLineCache.get(dest)
@@ -213,20 +262,61 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		if cmd == DP_Command.NTF_KEYS_PERKINS:
 			log.debug(f"Perkins keys {data}")
 		if cmd in (DP_Command.NTF_KEYS_FUNCTION, DP_Command.NTF_KEYS_PERKINS):
-			try:
-				gesture = DPKeyGesture(self.model, cmd, data)
-			except ValueError:
-				return
-			if inputCore.manager is not None:
+			# Extract key group from second byte of command
+			self._handleKeyPress(cmd.secondByte, data)
+
+	def _handleKeyPress(self, groupNum: int, data: bytes):
+		"""Handle a key press notification from the display.
+
+		Tracks keys across multiple groups and fires gesture only when all keys released.
+		Supports multi-button combinations.
+
+		The bit order is reversed (LSB to MSB) to match BRLTTY key numbering scheme.
+
+		:param groupNum: The key group ID (second byte of notification command)
+		:param data: The key press data as bytes
+		"""
+		try:
+			group = DP_KeyGroup(groupNum)
+		except ValueError:
+			log.debugWarning(f"Unknown key group: {groupNum}")
+			return
+
+		# Check if any key in this group is pressed
+		anyKeyPressed = any(byte != 0 for byte in data)
+
+		if anyKeyPressed:
+			# Extract which keys are pressed
+			for byteIndex, byte in enumerate(data):
+				for bitPos in range(8):
+					# Reverse bit order (check bit 7-bitPos) to match BRLTTY key numbering
+					if byte & (1 << (7 - bitPos)):
+						keyNumber = byteIndex * 8 + bitPos
+						self._keysPressed.add((group, keyNumber))
+
+			# Mark this group as having pressed keys
+			self._keyGroupsReleased[group] = False
+		else:
+			# All keys in this group have been released
+			self._keyGroupsReleased[group] = True
+
+			# Check if all groups are now released
+			if self._keysPressed and all(self._keyGroupsReleased.values()):
 				try:
-					inputCore.manager.executeGesture(gesture)
-				except inputCore.NoInputGestureAction:
+					gesture = DPInputGesture(self.model, self._keysPressed.copy())
+					if inputCore.manager is not None:
+						inputCore.manager.executeGesture(gesture)
+				except (ValueError, inputCore.NoInputGestureAction):
 					pass
 
+				# Reset state for next gesture
+				self._keysPressed.clear()
+
 	def __init__(self, port: str = "auto"):
+		self._receiveBuffer: bytearray = bytearray()
 		if port == "auto":
 			# Try autodetection
-			for portType, portId, port, portInfo in self._getTryPorts(port):
+			for portType, portId, port, portInfo in self._getTryPorts(port):  # noqa: B020, PLR1704
 				if self._tryConnect(port):
 					break
 			else:
@@ -237,6 +327,14 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 				raise RuntimeError(f"Could not connect to DotPad on port {port}")
 
 		super().__init__()
+
+		# Key press tracking for multi-button combinations
+		self._keysPressed: set[tuple[DP_KeyGroup, int]] = set()
+		self._keyGroupsReleased: dict[DP_KeyGroup, bool] = {}
+
+		# Initialize all key groups as released
+		for group in DP_KeyGroup:
+			self._keyGroupsReleased[group] = True
 
 	def _tryConnect(self, port: str) -> bool:
 		"""Try to connect to a DotPad device on the given port.
@@ -254,6 +352,9 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		:param port: The port to connect to.
 		:return: True if connection successful, False otherwise.
 		"""
+		# Start each probe with a clean buffer so stray bytes from a previously
+		# probed (non-DotPad) port can't corrupt this device's first response.
+		self._receiveBuffer.clear()
 		try:
 			self._dev = hwIo.Serial(
 				port=port,
@@ -273,11 +374,11 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 			else:
 				raise RuntimeError("No text or graphics displays")
 			return True
-		except Exception:
+		except Exception:  # noqa: BLE001
 			# Clean up on failure
 			try:
 				self._dev.close()
-			except Exception:
+			except Exception:  # noqa: BLE001, S110
 				pass
 			return False
 
@@ -319,9 +420,7 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 		if (
 			value == BrailleDestination.TEXT
 			and self._boardInformation.features & DP_Features.HAS_TEXT_DISPLAY
-		):
-			self._brailleDestination = value
-		elif (
+		) or (
 			value == BrailleDestination.GRAPHIC
 			and self._boardInformation.features & DP_Features.HAS_GRAPHIC_DISPLAY
 		):
@@ -399,33 +498,62 @@ class BrailleDisplayDriver(braille.BrailleDisplayDriver):
 	gestureMap = inputCore.GlobalGestureMap(
 		{
 			"globalCommands.GlobalCommands": {
-				"braille_scrollBack": ("br(dotPad):pan_left",),
-				"braille_scrollForward": ("br(dotPad):pan_right",),
+				"braille_scrollBack": ("br(dotPad):panLeft",),
+				"braille_scrollForward": ("br(dotPad):panRight",),
 			},
 		},
 	)
 
 
-class DPKeyGesture(braille.BrailleDisplayGesture):
+class DPInputGesture(braille.display.gesture.BrailleDisplayGesture):
+	"""Input gesture for DotPad display supporting multi-button combinations."""
+
 	source = BrailleDisplayDriver.name
 
-	def __init__(self, model: str, cmd: DP_Command, data: bytes):
+	def __init__(self, model: str, keys: set[tuple[DP_KeyGroup, int]]):
+		"""Initialize gesture from pressed keys.
+
+		:param model: The device model name (e.g., "DotPad320A") for model-specific gestures
+		:param keys: Set of (group, keyNumber) tuples representing pressed keys
+		:raises ValueError: If no valid keys can be mapped to names
+		"""
+		super().__init__()
 		self.model = model
-		if cmd == DP_Command.NTF_KEYS_FUNCTION:
-			functionNum = 0
-			for dataByte in data:
-				for bit in range(7, -1, -1):
-					functionNum += 1
-					if dataByte & 1 << bit:
-						self.id = f"function{functionNum}"
-						return
-			else:
-				raise ValueError("No function key")
-		elif cmd == DP_Command.NTF_KEYS_PERKINS:
-			for key in DP_PerkinsKey:
-				dataIndex, bitIndex = divmod(key.value, 8)
-				bitIndex = 7 - bitIndex
-				if data[dataIndex] & 1 << bitIndex:
-					self.id = key.name.lower()
-					return
-		raise ValueError(f"Unsupported command {cmd.name}")
+		self.keys = keys
+		self.keyNames = []
+
+		# Build key names from all pressed keys
+		for group, keyNumber in sorted(keys):
+			if group == DP_KeyGroup.FUNCTION:
+				self.keyNames.append(f"f{keyNumber + 1}")
+			elif group == DP_KeyGroup.PERKINS:
+				try:
+					perkinsKey = DP_PerkinsKey(keyNumber)
+				except ValueError:
+					log.warning(f"Unknown Perkins key: {keyNumber}")
+					continue
+				# Convert SCREAMING_SNAKE_CASE to camelCase for gesture IDs
+				keyName = self._formatPerkinsKeyName(perkinsKey.name)
+				self.keyNames.append(keyName)
+			# TODO: Add support for ROUTING and SCROLL groups when needed
+
+		if not self.keyNames:
+			raise ValueError("No valid key names generated from pressed keys")
+
+		self.id = "+".join(self.keyNames)
+
+	def _formatPerkinsKeyName(self, enumName: str) -> str:
+		"""Convert DP_PerkinsKey enum name to gesture-friendly format.
+
+		Converts SCREAMING_SNAKE_CASE like 'PAN_LEFT' to camelCase like 'panLeft'.
+		Single words like 'SPACE' become lowercase like 'space'.
+
+		:param enumName: The enum member name (e.g., 'PAN_LEFT', 'SPACE', 'DOT7')
+		:return: Formatted key name for gesture ID
+		"""
+		parts = enumName.split("_")
+		if len(parts) == 1:
+			# Single word: just lowercase (e.g., SPACE -> space, DOT7 -> dot7)
+			return parts[0].lower()
+		# Multiple words: camelCase (e.g., PAN_LEFT -> panLeft)
+		return parts[0].lower() + "".join(word.capitalize() for word in parts[1:])

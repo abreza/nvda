@@ -71,6 +71,9 @@ class ConnectionInfo:
 	insecure: bool = False
 	"""Allow insecure connections without SSL/TLS, defaults to False"""
 
+	trustedFingerprint: str | None = None
+	"""Specifies a single certificate fingerprint to trust if :attr:`insecure` is ``True``."""
+
 	def __post_init__(self) -> None:
 		self.port = self.port or SERVER_PORT
 		self.mode = ConnectionMode(self.mode)
@@ -99,7 +102,7 @@ class ConnectionInfo:
 		try:
 			ConnectionMode(mode)
 		except ValueError:
-			raise URLParsingError("Invalid mode provided: %r" % mode)
+			raise URLParsingError("Invalid mode provided: %r" % mode)  # noqa: UP031
 		return cls(hostname=hostname, mode=mode, key=key, port=port, insecure=insecure)
 
 	def getAddress(self) -> str:

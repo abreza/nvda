@@ -1,5 +1,5 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2006-2025 NV Access Limited, Aleksey Sadovoy, Peter Vágner, Rui Batista, Zahari Yurukov,
+# Copyright (C) 2006-2026 NV Access Limited, Aleksey Sadovoy, Peter Vágner, Rui Batista, Zahari Yurukov,
 # Joseph Lee, Babbage B.V., Łukasz Golonka, Julien Cochuyt, Cyrille Bougot
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
@@ -10,7 +10,11 @@ In addition, this module provides three actions: profile switch notifier, an act
 For the latter two actions, one can perform actions prior to and/or after they take place.
 """
 
+from collections.abc import Collection  # noqa: I001
 from enum import Enum
+from typing import Any
+from addonAPIVersion import BACK_COMPAT_TO
+
 import globalVars
 import winreg
 import os
@@ -24,30 +28,25 @@ from configobj import ConfigObj
 from configobj.validate import Validator
 from logHandler import log
 import logging
-from logging import DEBUG
+from utils.caseInsensitiveCollections import CaseInsensitiveSet
 import winBindings.shell32
 from shlobj import FolderId, SHGetKnownFolderPath
 import baseObject
 import easeOfAccess
 from fileUtils import FaultTolerantFile
 import extensionPoints
+import functools
 
 from . import profileUpgrader
 from . import aggregatedSection
+from .configSections import _loadCustomSections
 from .configSpec import confspec
+from .featureFlagEnums import BrailleTextWrapFlag
 from .featureFlag import (
 	_transformSpec_AddFeatureFlagDefault,
 	_validateConfig_featureFlag,
 )
 from .registry import RegistryKey as _RegistryKey
-from typing import (
-	Any,
-	Dict,
-	List,
-	Optional,
-	Set,
-	Tuple,
-)
 import NVDAState
 from NVDAState import WritePaths
 
@@ -102,10 +101,11 @@ def __getattr__(attrName: str) -> Any:
 			stack_info=True,
 		)
 		return _RegistryKey.CONFIG_IN_LOCAL_APPDATA_SUBKEY.value
-	raise AttributeError(f"module {repr(__name__)} has no attribute {repr(attrName)}")
+	raise AttributeError(f"module {__name__!r} has no attribute {attrName!r}")
 
 
 def initialize():
+	_loadCustomSections()
 	global conf
 	conf = ConfigManager()
 
@@ -118,7 +118,7 @@ def saveOnExit():
 	if conf["general"]["saveConfigurationOnExit"]:
 		try:
 			conf.save()
-		except:  # noqa: E722
+		except:  # noqa: E722, S110
 			pass
 
 
@@ -135,8 +135,8 @@ def isInstalledCopy() -> bool:
 			"- this is not an installed copy.",
 		)
 		return False
-	except WindowsError:
-		log.error(
+	except OSError:
+		log.error(  # noqa: G201
 			f"Unable to open isInstalledCopy registry key {_RegistryKey.INSTALLED_COPY}",
 			exc_info=True,
 		)
@@ -150,15 +150,15 @@ def isInstalledCopy() -> bool:
 			"- this may not be an installed copy.",
 		)
 		return False
-	except WindowsError:
-		log.error("Unable to query isInstalledCopy registry key", exc_info=True)
+	except OSError:
+		log.error("Unable to query isInstalledCopy registry key", exc_info=True)  # noqa: G201
 		return False
 
 	k.Close()
 	try:
 		return os.stat(instDir) == os.stat(globalVars.appDir)
-	except (WindowsError, FileNotFoundError):
-		log.error(
+	except (OSError, FileNotFoundError):
+		log.error(  # noqa: G201
 			"Failed to access the installed NVDA directory,"
 			"or, a portable copy failed to access the current NVDA app directory",
 			exc_info=True,
@@ -166,14 +166,14 @@ def isInstalledCopy() -> bool:
 		return False
 
 
-def getInstalledUserConfigPath() -> Optional[str]:
+def getInstalledUserConfigPath() -> str | None:
 	try:
 		winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, _RegistryKey.NVDA.value)
 	except FileNotFoundError:
 		log.debug("Could not find nvda registry key, NVDA is not currently installed")
 		return None
-	except WindowsError:
-		log.error("Could not open nvda registry key", exc_info=True)
+	except OSError:
+		log.error("Could not open nvda registry key", exc_info=True)  # noqa: G201
 		return None
 
 	if NVDAState._configInLocalAppDataEnabled():
@@ -184,7 +184,7 @@ def getInstalledUserConfigPath() -> Optional[str]:
 	configParent = SHGetKnownFolderPath(configFolder)
 	try:
 		return os.path.join(configParent, "nvda")
-	except WindowsError:
+	except OSError:
 		# (#13242) There is some uncertainty as to how this could be caused
 		log.debugWarning("Installed user config is not in local app data", exc_info=True)
 		return None
@@ -234,10 +234,10 @@ def getScratchpadDir(ensureExists: bool = False) -> str:
 	return path
 
 
-def initConfigPath(configPath: Optional[str] = None) -> None:
+def initConfigPath(configPath: str | None = None) -> None:
 	"""
 	Creates the current configuration path if it doesn't exist. Also makes sure that various sub directories also exist.
-	@param configPath: an optional path which should be used instead (only useful when being called from outside of NVDA)
+	:param configPath: an optional path which should be used instead (only useful when being called from outside of NVDA)
 	"""
 	if not configPath:
 		configPath = WritePaths.configDir
@@ -302,14 +302,29 @@ def _setStartOnLogonScreen(enable: bool) -> None:
 	easeOfAccess.setAutoStart(easeOfAccess.AutoStartContext.ON_LOGON_SCREEN, enable)
 
 
-def setSystemConfigToCurrentConfig():
+def setSystemConfigToCurrentConfig(*, addonsToCopy: Collection[str] = ()):
+	"""
+	Replaces the system configuration with the current user configuration.
+
+	:param addonsToCopy: IDs of the add-ons to copy, defaults to ()
+		.. warning::
+			Only enabled add-ons should be copied.
+			Providing IDs of add-ons that are disabled may cause unexpected results,
+			especially for add-ons that are not compatible with the current API version.
+	:raises installer.RetriableFailure: If copying the user to the system config fails.
+	:raises RuntimeError: If calling ``nvda_slave`` fails for some other reason.
+	"""
 	fromPath = WritePaths.configDir
 	if winBindings.shell32.IsUserAnAdmin():
-		_setSystemConfig(fromPath)
+		_setSystemConfig(fromPath, addonsToCopy=addonsToCopy)
 	else:
 		import systemUtils
 
-		res = systemUtils.execElevated(SLAVE_FILENAME, ("setNvdaSystemConfig", fromPath), wait=True)
+		res = systemUtils.execElevated(
+			SLAVE_FILENAME,
+			("setNvdaSystemConfig", fromPath, *addonsToCopy),
+			wait=True,
+		)
 		if res == 2:
 			import installer
 
@@ -318,8 +333,25 @@ def setSystemConfigToCurrentConfig():
 			raise RuntimeError("Slave failure")
 
 
-def _setSystemConfig(fromPath, *, prefix=sys.prefix):
-	import installer
+def _setSystemConfig(
+	fromPath: str,
+	*,
+	prefix: str = sys.prefix,
+	addonsToCopy: Collection[str] = (),
+	isMigration: bool = False,
+):
+	"""
+	Sets the system config to that in ``fromPath``.
+
+	:param fromPath: Path to config directory to copy.
+	:param prefix: Directory in which to set the system config, defaults to :attr:`sys.prefix`.
+			The system config will be in a ``systemConfig`` subdirectory of this directory.
+	:param addonsToCopy: List of add-on IDs to include in the system configuration, defaults to `()`.
+	:param isMigration: Whether this is a migration from one system config location to another, defaults to ``False``.
+		When this is ``True``, the ``addons/`` directory and ``addonsState.pickle``/``addonsState.json`` in ``fromPath`` will be copied as-is, if they exist.
+	"""
+	import installer  # noqa: I001
+	import addonHandler
 
 	toPath = os.path.join(prefix, "systemConfig")
 	log.debug("Copying config to systemconfig dir: %s", toPath)
@@ -333,22 +365,70 @@ def _setSystemConfig(fromPath, *, prefix=sys.prefix):
 			for subPath in removeSubs:
 				log.debug("Ignored folder that may contain unpackaged addons: %s", subPath)
 				subDirs.remove(subPath)
+			if not isMigration:
+				# Don't copy the addons state file,
+				# as we will generate a new one based on which add-ons are being copied.
+				# Just in case it still exists, also exclude the old one.
+				stateFilenames = (
+					addonHandler.STATE_FILENAME.casefold(),
+					addonHandler._OLD_STATE_FILENAME.casefold(),
+				)
+				files = [filename for filename in files if filename.casefold() not in stateFilenames]
 		else:
 			relativePath = os.path.relpath(curSourceDir, fromPath)
 			curDestDir = os.path.join(toPath, relativePath)
+			if not isMigration and relativePath.casefold() == "addons":
+				_prepareToCopyAddons(fromPath, toPath, subDirs, addonsToCopy)
 		if not os.path.isdir(curDestDir):
 			os.makedirs(curDestDir)
 		for f in files:
 			# Do not copy executables to the system configuration, as this may cause security risks.
 			# This will also exclude pending updates.
-			if f.endswith(".exe"):
+			if f.casefold().endswith(".exe"):
 				log.debug(
-					"Ignored file %s while copying current user configuration to system configuration" % f,
+					"Ignored file %s while copying current user configuration to system configuration" % f,  # noqa: UP031
 				)
 				continue
 			sourceFilePath = os.path.join(curSourceDir, f)
 			destFilePath = os.path.join(curDestDir, f)
 			installer.tryCopyFile(sourceFilePath, destFilePath)
+
+
+def _prepareToCopyAddons(fromPath: str, toPath: str, addonDirs: list[str], addonsToCopy: Collection[str]):
+	"""Determine which add-on directories to copy to the system profile, and create the appropriate addonsState file.
+
+	.. Note::
+		While this function returns ``None``, it has two major side-effects:
+		1. The ``addonDirs`` list is mutated to contain only the add-ons that should be copied.
+		2. A new `addonsState.pickle` is created in ``toPath``.
+
+	:param fromPath: Root of the source configuration directory.
+	:param toPath: Root of the destination configuration directory
+	:param addonDirs: Subdirectories of ``addons/`` in ``fromPath``.
+		This will be mutated to only contain the add-ons that should be copied.
+	:param addonsToCopy: Add-on IDs of the add-ons that should be copied.
+	"""
+	from addonStore.models.status import AddonStateCategory  # noqa: I001
+	import addonHandler
+
+	addonsToCopy = CaseInsensitiveSet(addonsToCopy)
+	allAddons = addonDirs[:]
+	addonDirs.clear()
+	addonDirs.extend(addon for addon in allAddons if addon.casefold() in addonsToCopy)
+	if addonDirs:
+		log.debug(f"Copying add-ons: {', '.join(addonDirs)}")
+		# We are copying add-ons, so we need to generate a new addons state file.
+		# If no add-ons have their compatibility overridden, the file will not be saved, but this is fine.
+		userAddonsState = addonHandler.AddonsState()
+		userAddonsState._load(os.path.join(fromPath, addonHandler.STATE_FILENAME))
+		systemAddonsState = addonHandler.AddonsState()
+		systemAddonsState.manualOverridesAPIVersion = userAddonsState.manualOverridesAPIVersion
+		systemAddonsState[AddonStateCategory.OVERRIDE_COMPATIBILITY] = (
+			userAddonsState[AddonStateCategory.OVERRIDE_COMPATIBILITY] & addonsToCopy
+		)
+		systemAddonsState._save(statePath=os.path.join(toPath, addonHandler.STATE_FILENAME))
+	else:
+		log.debug("No add-ons to copy.")
 
 
 def setStartOnLogonScreen(enable: bool) -> None:
@@ -365,7 +445,7 @@ def setStartOnLogonScreen(enable: bool) -> None:
 	try:
 		# Try setting it directly.
 		_setStartOnLogonScreen(enable)
-	except WindowsError:
+	except OSError:
 		log.debugWarning(
 			"Failed to set start on logon screen's config, retrying elevated.",
 			exc_info=True,
@@ -376,7 +456,7 @@ def setStartOnLogonScreen(enable: bool) -> None:
 		if (
 			systemUtils.execElevated(
 				SLAVE_FILENAME,
-				("config_setStartOnLogonScreen", "%d" % enable),
+				("config_setStartOnLogonScreen", "%d" % enable),  # noqa: UP031
 				wait=True,
 			)
 			!= 0
@@ -400,7 +480,7 @@ def _transformSpec(spec: ConfigObj):
 	)
 
 
-class ConfigManager(object):
+class ConfigManager:
 	"""Manages and provides access to configuration.
 	In addition to the base configuration, there can be multiple active configuration profiles.
 	Settings in more recently activated profiles take precedence,
@@ -410,13 +490,12 @@ class ConfigManager(object):
 	Changed settings are written to the most recently activated profile.
 	"""
 
-	BASE_ONLY_SECTIONS = {
+	BASE_ONLY_SECTIONS = {  # noqa: RUF012
 		"general",
 		"update",
 		"development",
 		"addonStore",
 		"remote",
-		"automatedImageDescriptions",
 		"math",
 		"screenCurtain",
 	}
@@ -430,9 +509,9 @@ class ConfigManager(object):
 		self.spec = confspec
 		_transformSpec(self.spec)
 		#: All loaded profiles by name.
-		self._profileCache: Optional[Dict[Optional[str], ConfigObj]] = {}
+		self._profileCache: dict[str | None, ConfigObj] = {}
 		#: The active profiles.
-		self.profiles: List[ConfigObj] = []
+		self.profiles: list[ConfigObj] = []
 		#: Whether profile triggers are enabled (read-only).
 		self.profileTriggersEnabled: bool = True
 		self.validator: Validator = Validator(
@@ -440,16 +519,16 @@ class ConfigManager(object):
 				"_featureFlag": _validateConfig_featureFlag,
 			},
 		)
-		self.rootSection: Optional[AggregatedSection] = None
+		self.rootSection: AggregatedSection | None = None
 		self._shouldHandleProfileSwitch: bool = True
 		self._pendingHandleProfileSwitch: bool = False
-		self._suspendedTriggers: Optional[List[ProfileTrigger]] = None
+		self._suspendedTriggers: list[ProfileTrigger] | None = None
 		self._initBaseConf()
 		#: Maps triggers to profiles.
-		self.triggersToProfiles: Optional[Dict[ProfileTrigger, ConfigObj]] = None
+		self.triggersToProfiles: dict[ProfileTrigger, ConfigObj] | None = None
 		self._loadProfileTriggers()
 		#: The names of all profiles that have been modified since they were last saved.
-		self._dirtyProfiles: Set[str] = set()
+		self._dirtyProfiles: set[str] = set()
 
 	def _handleProfileSwitch(self, shouldNotify=True):
 		if not self._shouldHandleProfileSwitch:
@@ -476,7 +555,7 @@ class ConfigManager(object):
 				self.baseConfigError = False
 			except:  # noqa: E722
 				backupFileName = fn + ".corrupted.bak"
-				log.error(
+				log.error(  # noqa: G201
 					"Error loading base configuration; the base configuration file will be reinitialized."
 					f" A copy of your previous configuration file will be saved at {backupFileName}",
 					exc_info=True,
@@ -486,7 +565,7 @@ class ConfigManager(object):
 						os.unlink(backupFileName)
 					os.rename(fn, backupFileName)
 				except Exception:
-					log.error(
+					log.error(  # noqa: G201
 						f"Unable to save a copy of the corrupted configuration to {backupFileName}",
 						exc_info=True,
 					)
@@ -508,34 +587,54 @@ class ConfigManager(object):
 		self.profiles.append(profile)
 		self._handleProfileSwitch()
 
-	def _loadConfig(self, fn, fileError=False):
-		log.info("Loading config: {0}".format(fn))
+	@staticmethod
+	def _shouldLogConfigAtStartup(profile: ConfigObj) -> bool:
+		"""since profile settings are not yet imported we have to "peek" to see
+		if debug level logging is enabled.
+
+		:param profile: The profile to check for logging settings.
+		:return: True if debug level logging is enabled, False otherwise.
+		"""
+		try:
+			logLevelName: str = profile["general"]["loggingLevel"]
+			if not logLevelName:
+				level = None
+			else:
+				level = logging.getLevelNamesMapping().get(logLevelName)
+		except KeyError:
+			level = None
+		return log.isEnabledFor(log.DEBUG) or (level and logging.DEBUG >= level)
+
+	def _loadConfig(self, fn: str | None, fileError: bool = False) -> ConfigObj:
+		"""Load a configuration from a file.
+
+		:param fn: The filename of the configuration file to load.
+		:param fileError: Whether to raise an error if the file cannot be read, defaults to False
+		:raises e: Re-raises any exception that occurs during the profile upgrade process.
+		:return: The loaded configuration object.
+		"""
+		log.info(f"Loading config: {fn}")
 		profile = ConfigObj(fn, indent_type="\t", encoding="UTF-8", file_error=fileError)
 		# Python converts \r\n to \n when reading files in Windows, so ConfigObj can't determine the true line ending.
 		profile.newlines = "\r\n"
 		profileCopy = deepcopy(profile)
+		if NVDAState.shouldWriteToDisk() and profile.filename is not None:
+			writeProfileFunc = self._writeProfileToFile
+		else:
+			writeProfileFunc = None
 		try:
-			if NVDAState.shouldWriteToDisk() and profile.filename is not None:
-				writeProfileFunc = self._writeProfileToFile
-			else:
-				writeProfileFunc = None
 			profileUpgrader.upgrade(profile, self.validator, writeProfileFunc)
 		except Exception as e:
-			# Log at level info to ensure that the profile is logged.
-			log.info("Config before schema update:\n%s" % profileCopy, exc_info=False)
-			raise e
-		# since profile settings are not yet imported we have to "peek" to see
-		# if debug level logging is enabled.
-		try:
-			logLevelName = profile["general"]["loggingLevel"]
-		except KeyError:
-			logLevelName = None
-		if log.isEnabledFor(log.DEBUG) or (logLevelName and DEBUG >= logging.getLevelName(logLevelName)):
-			# Log at level info to ensure that the profile is logged.
+			if self._shouldLogConfigAtStartup(profileCopy):
+				# We must log at info level here as the logHandler hasn't been set to log at debug level yet.
+				log.info(f"Config before schema update:\n{profileCopy}", redactSecrets=True)
+			raise e  # noqa: TRY201
+
+		if self._shouldLogConfigAtStartup(profile):
+			# We must log at info level here as the logHandler hasn't been set to log at debug level yet.
 			log.info(
-				"Config loaded (after upgrade, and in the state it will be used by NVDA):\n{0}".format(
-					profile,
-				),
+				f"Config loaded (after upgrade, and in the state it will be used by NVDA):\n{profile}",
+				redactSecrets=True,
 			)
 		return profile
 
@@ -622,7 +721,7 @@ class ConfigManager(object):
 			return
 		self._dirtyProfiles.add(self.profiles[-1].name)
 
-	def _writeProfileToFile(self, filename, profile):
+	def _writeProfileToFile(self, filename: str, profile: ConfigObj):
 		with FaultTolerantFile(filename) as f:
 			profile.write(f)
 
@@ -638,14 +737,14 @@ class ConfigManager(object):
 			log.info("Base configuration saved")
 			for name in self._dirtyProfiles:
 				self._writeProfileToFile(self._profileCache[name].filename, self._profileCache[name])
-				log.info("Saved configuration profile %s" % name)
+				log.info("Saved configuration profile %s" % name)  # noqa: UP031
 			self._dirtyProfiles.clear()
 		except PermissionError as e:
 			log.warning("Error saving configuration; probably read only file system", exc_info=True)
-			raise e
+			raise e  # noqa: TRY201
 		except Exception as e:
 			log.warning("Error saving configuration", exc_info=True)
-			raise e
+			raise e  # noqa: TRY201
 		post_configSave.notify()
 
 	def reset(self, factoryDefaults=False):
@@ -675,7 +774,7 @@ class ConfigManager(object):
 			raise ValueError("Missing name.")
 		fn = self._getProfileFn(name)
 		if os.path.isfile(fn):
-			raise ValueError("A profile with the same name already exists: %s" % name)
+			raise ValueError("A profile with the same name already exists: %s" % name)  # noqa: UP031
 		# Just create an empty file to make sure we can.
 		open(fn, "w").close()
 		# Register a script for the new profile.
@@ -695,7 +794,7 @@ class ConfigManager(object):
 			return
 		fn = self._getProfileFn(name)
 		if not os.path.isfile(fn):
-			raise LookupError("No such profile: %s" % name)
+			raise LookupError("No such profile: %s" % name)  # noqa: UP031
 		os.remove(fn)
 		# Remove the script for the deleted profile from the script collector.
 		# Import late to avoid circular import.
@@ -757,11 +856,11 @@ class ConfigManager(object):
 		oldFn = self._getProfileFn(oldName)
 		newFn = self._getProfileFn(newName)
 		if not os.path.isfile(oldFn):
-			raise LookupError("No such profile: %s" % oldName)
+			raise LookupError("No such profile: %s" % oldName)  # noqa: UP031
 		# Windows file names are case insensitive,
 		# so only test for file existence if the names don't match case insensitively.
 		if oldName.lower() != newName.lower() and os.path.isfile(newFn):
-			raise ValueError("A profile with the same name already exists: %s" % newName)
+			raise ValueError("A profile with the same name already exists: %s" % newName)  # noqa: UP031
 
 		os.rename(oldFn, newFn)
 		# Update any associated triggers.
@@ -800,7 +899,7 @@ class ConfigManager(object):
 			self._suspendedTriggers[trigger] = "enter"
 			return
 
-		log.debug("Activating triggered profile %s" % trigger.profileName)
+		log.debug("Activating triggered profile %s" % trigger.profileName)  # noqa: UP031
 		try:
 			profile = trigger._profile = self._getProfile(trigger.profileName)
 		except:
@@ -831,7 +930,7 @@ class ConfigManager(object):
 		profile = trigger._profile
 		if profile is None:
 			return
-		log.debug("Deactivating triggered profile %s" % trigger.profileName)
+		log.debug("Deactivating triggered profile %s" % trigger.profileName)  # noqa: UP031
 		profile.triggered = False
 		try:
 			self.profiles.remove(profile)
@@ -909,7 +1008,7 @@ class ConfigManager(object):
 		try:
 			cobj = ConfigObj(fn, indent_type="\t", encoding="UTF-8")
 		except:  # noqa: E722
-			log.error("Error loading profile triggers", exc_info=True)
+			log.error("Error loading profile triggers", exc_info=True)  # noqa: G201
 			cobj = ConfigObj(None, indent_type="\t", encoding="UTF-8")
 			cobj.filename = fn
 		# Python converts \r\n to \n when reading files in Windows, so ConfigObj can't determine the true line ending.
@@ -965,19 +1064,100 @@ class ConfigManager(object):
 		data.default = conf.validator.get_default_value(spec)
 		return data
 
+	def getConfigValue(self, *keyPath: *tuple[str, str, *tuple[str, ...]]) -> any:
+		"""
+		Retrieves the value of a configuration key.
+		:param keyPath: The path to the configuration key to retrieve.
+		:return: The value of the specified configuration key.
+		"""
+		return functools.reduce(lambda d, x: d.get(x), keyPath, self)
 
-class ConfigValidationData(object):
+	def setConfigValue(
+		self,
+		value: bool | float | str,
+		*keyPath: *tuple[str, str, *tuple[str, ...]],
+	) -> None:
+		"""
+		Sets the value of a configuration key.
+		:param value: The value to set for the configuration key.
+		:param keyPath: The path to the configuration key to set.
+		:return: None.
+		"""
+		dictToUpdate = functools.reduce(lambda d, x: d.get(x), keyPath[:-1], self)
+		dictToUpdate[keyPath[-1]] = value
+
+	def _getConfigValueRange(self, *keyPath: tuple[str, str, *tuple[str, ...]]) -> tuple[float, float]:
+		"""
+		Gets the minimum and maximum allowed values for a configuration key.
+		:param keyPath: The path to The configuration key to evaluate.
+		:return: A tuple of (minValue, maxValue).
+		"""
+		validation = self.getConfigValidation(keyPath)
+		minValue = float(validation.kwargs["min"])
+		maxValue = float(validation.kwargs["max"])
+		return minValue, maxValue
+
+	def _clampValue(self, currentValue: float, minValue: float, maxValue: float, step: float) -> float:
+		"""
+		Calculates a new value by applying a step, constrained within min/max bounds.
+		:param currentValue: The current value.
+		:param minValue: The minimum allowed value.
+		:param maxValue: The maximum allowed value.
+		:param step: The amount to change the value by (positive or negative).
+		:return: The new value, clamped between min and max.
+		"""
+		return min(max(currentValue + step, minValue), maxValue)
+
+	def valueToPercentage(self, *keyPath: tuple[str, str, *tuple[str, ...]]) -> int:
+		"""
+		Calculates the percentage representation of a configuration value within its defined range.
+		:param keyPath: The path to the configuration key to evaluate.
+		:return: The percentage (0-100) of the value within the range.
+		"""
+		minValue, maxValue = self._getConfigValueRange(*keyPath)
+		currentValue = self.getConfigValue(*keyPath)
+		return round((currentValue - minValue) / (maxValue - minValue) * 100)
+
+	def percentageToValue(self, *keyPath: tuple[str, str, *tuple[str, ...]], percentage: int) -> float:
+		"""
+		Calculates the configuration value corresponding to a given percentage within its defined range.
+		:param keyPath: The path to the configuration key to evaluate.
+		:param percentage: The percentage (0-100) to convert to a value.
+		:return: The value corresponding to the given percentage within the defined range.
+		"""
+		minValue, maxValue = self._getConfigValueRange(*keyPath)
+		percentage = max(0, min(100, percentage))
+		value = minValue + (maxValue - minValue) * (percentage / 100)
+		return value
+
+	def clampedIncrementAndUpdateConfig(
+		self,
+		*keyPath: tuple[str, str, *tuple[str, ...]],
+		step: float,
+	) -> None:
+		"""
+		Updates a configuration value by applying a step, constrained within its valid range.
+		:param keyPath: The path to the configuration key to update.
+		:param step: The step adjustment value (positive, negative, or 0).
+		"""
+		currentValue = self.getConfigValue(*keyPath)
+		minValue, maxValue = self._getConfigValueRange(*keyPath)
+		newValue = self._clampValue(currentValue, minValue, maxValue, step)
+		self.setConfigValue(newValue, *keyPath)
+
+
+class ConfigValidationData:
 	validationFuncName: str | None = None
 
 	def __init__(self, validationFuncName):
 		self.validationFuncName = validationFuncName
-		super(ConfigValidationData, self).__init__()
+		super().__init__()
 
 	# args passed to the convert function
-	args: list[Any] = []
+	args: list[Any] = []  # noqa: RUF012
 
 	# kwargs passed to the convert function.
-	kwargs: dict[str, Any] = {}
+	kwargs: dict[str, Any] = {}  # noqa: RUF012
 	# the default value, used when config is missing.
 	default = None  # converted to the appropriate type
 
@@ -990,9 +1170,9 @@ class AggregatedSection:
 	def __init__(
 		self,
 		manager: ConfigManager,
-		path: Tuple[str],
+		path: tuple[str, ...],
 		spec: ConfigObj,
-		profiles: List[ConfigObj],
+		profiles: list[ConfigObj],
 	):
 		self.manager = manager
 		self.path = path
@@ -1204,14 +1384,14 @@ class AggregatedSection:
 
 		# Alias old config items to their new counterparts for backwards compatibility.
 		# Uncomment when there are new links that need to be made.
-		# if BACK_COMPAT_TO < (2027, 1, 0) and NVDAState._allowDeprecatedAPI():
-		# self._linkDeprecatedValues(key, val)
+		if BACK_COMPAT_TO < (2027, 1, 0) and NVDAState._allowDeprecatedAPI():
+			self._linkDeprecatedValues(key, val)
 
 	def _linkDeprecatedValues(self, key: aggregatedSection._cacheKeyT, val: aggregatedSection._cacheValueT):
 		"""Link deprecated config keys and values to their replacements.
 
-		:arg key: The configuration key to link to its new or old counterpart.
-		:arg val: The value associated with the configuration key.
+		:param key: The configuration key to link to its new or old counterpart.
+		:param val: The value associated with the configuration key.
 
 		Example of how to link values:
 
@@ -1232,7 +1412,35 @@ class AggregatedSection:
 		>>> 		return
 		>>> ...
 		"""
+		# cacheVal defaults to val; overridden when profile and cache need different types.
+		cacheVal = val
 		match self.path:
+			case "braille":
+				match key:
+					case "wordWrap":
+						# The "wordWrap" setting was renamed to "textWrap" and became a feature flag.
+						log.warning(
+							"braille.wordWrap is deprecated. Use braille.textWrap instead.",
+							stack_info=True,
+						)
+						key = "textWrap"
+						flagEnum = BrailleTextWrapFlag.AT_WORD_BOUNDARIES if val else BrailleTextWrapFlag.NONE
+						# Profile stores strings; cache must hold a validated FeatureFlag object
+						# (matching what __setitem__ normally stores) so .calculated() works on next read.
+						# Validate through the spec to avoid hardcoding behaviorOfDefault here.
+						val = flagEnum.name
+						cacheVal = self.manager.validator.check(self._spec[key], val)
+					case "textWrap":
+						# The "textWrap" setting was added in place of "wordWrap" and became a feature flag.
+						key = "wordWrap"
+						calculated: BrailleTextWrapFlag = val.calculated()
+						val = calculated == BrailleTextWrapFlag.AT_WORD_BOUNDARIES
+						cacheVal = val
+
+					case _:
+						# We don't care about other keys in this section.
+						return
+
 			case _:
 				# We don't care about other sections.
 				return
@@ -1240,7 +1448,7 @@ class AggregatedSection:
 		# Update the value in the most recently activated profile.
 		# If we have reached this point, we must have a new key and value to set.
 		self._getUpdateSection()[key] = val
-		self._cache[key] = val
+		self._cache[key] = cacheVal
 
 	def _getUpdateSection(self):
 		profile = self.profiles[-1]
@@ -1274,7 +1482,7 @@ class AggregatedSection:
 		self._spec.update(val)
 
 
-class ProfileTrigger(object):
+class ProfileTrigger:
 	"""A trigger for automatic activation/deactivation of a configuration profile.
 	The user can associate a profile with a trigger.
 	When the trigger applies, the associated profile is activated.
@@ -1320,8 +1528,8 @@ class ProfileTrigger(object):
 		try:
 			conf._triggerProfileEnter(self)
 		except:  # noqa: E722
-			log.error(
-				"Error entering trigger %s, profile %s" % (self.spec, self.profileName),
+			log.error(  # noqa: G201
+				"Error entering trigger %s, profile %s" % (self.spec, self.profileName),  # noqa: UP031
 				exc_info=True,
 			)
 
@@ -1336,8 +1544,8 @@ class ProfileTrigger(object):
 		try:
 			conf._triggerProfileExit(self)
 		except:  # noqa: E722
-			log.error(
-				"Error exiting trigger %s, profile %s" % (self.spec, self.profileName),
+			log.error(  # noqa: G201
+				"Error exiting trigger %s, profile %s" % (self.spec, self.profileName),  # noqa: UP031
 				exc_info=True,
 			)
 

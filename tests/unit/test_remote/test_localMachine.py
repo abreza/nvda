@@ -3,7 +3,7 @@
 # This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
 # For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
-from functools import reduce
+from functools import reduce  # noqa: I001
 from itertools import product
 from typing import Any, NamedTuple
 import unittest
@@ -103,13 +103,15 @@ class TestCanSendSAS(unittest.TestCase):
 		yield from reduce(
 			# Only keep first instance of a given parameter set
 			lambda acc, val: acc if val in acc else [*acc, val],
-			map(
+			map(  # noqa: C417
 				# Keep return values
-				lambda params: params
-				#  if OpenKeyEx and QueryValueEx don't raise
-				if params.openKeyRaises is params.queryValueRaises is None
-				# Otherwise, discard the return values as they don't matter
-				else params._replace(valueData=None, valueType=None),
+				lambda params: (
+					params
+					#  if OpenKeyEx and QueryValueEx don't raise
+					if params.openKeyRaises is params.queryValueRaises is None
+					# Otherwise, discard the return values as they don't matter
+					else params._replace(valueData=None, valueType=None)
+				),
 				# Make Params instances out of the product of all of the possible parameter values
 				map(CanSendSASFactors._make, product(*FACTOR_VALUES.values())),
 			),
@@ -119,7 +121,7 @@ class TestCanSendSAS(unittest.TestCase):
 
 	def test_canSendSAS(self):
 		for params in self._generate_parameters():
-			with self.subTest(**params._asdict()):
+			with self.subTest(**params._asdict()):  # noqa: SIM117
 				with (
 					mock.patch("_remoteClient.localMachine.hasUiAccess", return_value=params.hasUIAccess),
 					mock.patch("winreg.OpenKeyEx", side_effect=params.openKeyRaises),

@@ -1,10 +1,9 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2015-2025 NV Access Limited, Christopher Toth, Tyler Spivey, Babbage B.V., David Sexton and others.
+# Copyright (C) 2015-2026 NV Access Limited, Christopher Toth, Tyler Spivey, Babbage B.V., David Sexton and others.
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
 
-import threading
-from typing import Optional, Set, Tuple
+import threading  # noqa: I001
 
 import api
 import braille
@@ -35,22 +34,22 @@ from .protocol import hostPortToAddress
 from .transport import RelayTransport
 
 # Type aliases
-KeyModifier = Tuple[int, bool]  # (vk_code, extended)
-Address = Tuple[str, int]  # (hostname, port)
+KeyModifier = tuple[int, bool]  # (vk_code, extended)
+Address = tuple[str, int]  # (hostname, port)
 
 
 class RemoteClient:
-	localScripts: Set[scriptHandler._ScriptFunctionT]
+	localScripts: set[scriptHandler._ScriptFunctionT]
 	localMachine: LocalMachine
-	leaderSession: Optional[LeaderSession]
-	followerSession: Optional[FollowerSession]
-	keyModifiers: Set[KeyModifier]
-	hostPendingModifiers: Set[KeyModifier]
+	leaderSession: LeaderSession | None
+	followerSession: FollowerSession | None
+	keyModifiers: set[KeyModifier]
+	hostPendingModifiers: set[KeyModifier]
 	hostPendingNonmodifier: KeyModifier | None
 	_connecting: bool
-	leaderTransport: Optional[RelayTransport]
-	followerTransport: Optional[RelayTransport]
-	localControlServer: Optional[server.LocalRelayServer]
+	leaderTransport: RelayTransport | None
+	followerTransport: RelayTransport | None
+	localControlServer: server.LocalRelayServer | None
 	sendingKeys: bool
 	sdHandler: SecureDesktopHandler | None
 
@@ -65,20 +64,22 @@ class RemoteClient:
 		self.localMachine = LocalMachine()
 		self.followerSession = None
 		self.leaderSession = None
-		self.menu: Optional[RemoteMenu] = None
+		self.menu: RemoteMenu | None = None
 		if not isRunningOnSecureDesktop():
-			self.menu: Optional[RemoteMenu] = RemoteMenu(self)
+			self.menu: RemoteMenu | None = RemoteMenu(self)
 		self._connecting = False
+		self._followerConnectFailures: int = 0
 		urlHandler.registerURLHandler()
 		self.leaderTransport = None
 		self.followerTransport = None
 		self.localControlServer = None
 		self.sendingKeys = False
 		self._wasSendingKeysBeforeLock: bool = False
+		self._disconnectConfirmationDialog: MessageDialog | None = None
 		try:
 			self.sdHandler = SecureDesktopHandler()
 		except RuntimeError:
-			log.error("Failed to initialise the secure desktop handler.", exc_info=True)
+			log.error("Failed to initialise the secure desktop handler.", exc_info=True)  # noqa: G201
 			self.sdHandler = None
 		else:
 			if isRunningOnSecureDesktop():
@@ -222,6 +223,10 @@ class RemoteClient:
 	@alwaysCallAfter
 	def doDisconnect(self) -> None:
 		"""Seek confirmation from the user before disconnecting."""
+		if self._disconnectConfirmationDialog:
+			self._disconnectConfirmationDialog.Raise()
+			self._disconnectConfirmationDialog.SetFocus()
+			return
 		if (
 			self.followerSession is not None
 			and configuration.getRemoteConfig()["ui"]["confirmDisconnectAsFollower"]
@@ -247,9 +252,16 @@ class RemoteClient:
 					buttons=confirmation_buttons,
 				)
 
-				if dialog.ShowModal() != ReturnCode.YES:
-					log.info("Remote disconnection cancelled by user.")
+				self._disconnectConfirmationDialog = dialog
+				try:
+					if dialog.ShowModal() != ReturnCode.YES:
+						log.info("Remote disconnection cancelled by user.")
+						return
+				except Exception:
+					log.error("Error showing disconnect confirmation dialog", exc_info=True)  # noqa: G201
 					return
+				finally:
+					self._disconnectConfirmationDialog = None
 		self.disconnect()
 
 	def disconnect(self, *, _silent: bool = False):
@@ -294,7 +306,7 @@ class RemoteClient:
 
 	@alwaysCallAfter
 	def onConnectAsLeaderFailed(self):
-		if self.leaderTransport.successfulConnects == 0:
+		if self.leaderTransport is not None and self.leaderTransport.successfulConnects == 0:
 			log.error(f"Failed to connect to {self.leaderTransport.address}")
 			self.disconnectAsLeader()
 			# Translators: Title of the connection error dialog.
@@ -305,6 +317,33 @@ class RemoteClient:
 				# Translators: Message shown when unable to connect to the remote computer.
 				message=_("Unable to connect to the remote computer"),
 				style=wx.OK | wx.ICON_WARNING,
+			)
+
+	@alwaysCallAfter
+	def onConnectAsFollowerFailed(self):
+		"""Notify the user when initially connecting as the controlled computer fails.
+
+		:note: Connection attempts continue in the background
+			(:class:`~.transport.ConnectorThread` retries roughly every 5 seconds),
+			so a transient message is used rather than a dialog,
+			and only for the first failed attempt of a connection that has never succeeded.
+			The retry loop must not be stopped here,
+			as unattended autoconnect relies on it (see #20131).
+			This is logged as a warning rather than an error,
+			as NVDA has not given up on the connection.
+		"""
+		if self.followerTransport is None or self.followerTransport.successfulConnects > 0:
+			return
+		self._followerConnectFailures += 1
+		if self._followerConnectFailures == 1:
+			log.warning(f"Failed to connect to {self.followerTransport.address}. Retrying.")
+			ui.delayedMessage(
+				pgettext(
+					"remote",
+					# Translators: Reported when connecting as the controlled computer fails.
+					# NVDA will keep trying to connect in the background.
+					"Unable to connect to the Remote Access server. Retrying",
+				),
 			)
 
 	def doConnect(self, evt: inputCore.InputGesture = None):
@@ -418,10 +457,12 @@ class RemoteClient:
 		if self.sdHandler is not None:
 			self.sdHandler.followerSession = self.followerSession
 		self.followerTransport = transport
+		self._followerConnectFailures = 0
 		transport.transportCertificateAuthenticationFailed.register(
 			self.onFollowerCertificateFailed,
 		)
 		transport.transportConnected.register(self.onConnectedAsFollower)
+		transport.transportConnectionFailed.register(self.onConnectAsFollowerFailed)
 		transport.transportDisconnected.register(self.onDisconnectedAsFollower)
 		transport.reconnectorThread.start()
 		if self.menu:
@@ -448,18 +489,19 @@ class RemoteClient:
 		log.warning(f"Certificate validation failed for {transport.address}")
 		self.lastFailAddress = transport.address
 		self.lastFailKey = transport.channel
+		self._lastFailFingerprint = transport.lastFailFingerprint
 		self.disconnect(_silent=True)
 		try:
-			certHash = transport.lastFailFingerprint
-
-			wnd = dialogs.CertificateUnauthorizedDialog(None, fingerprint=certHash)
+			wnd = dialogs.CertificateUnauthorizedDialog(None, fingerprint=self._lastFailFingerprint)
 			a = wnd.ShowModal()
 			if a == wx.ID_YES:
 				config = configuration.getRemoteConfig()
-				config["trustedCertificates"][hostPortToAddress(self.lastFailAddress)] = certHash
+				config["trustedCertificates"][hostPortToAddress(self.lastFailAddress)] = (
+					self._lastFailFingerprint
+				)
 			if a == wx.ID_YES or a == wx.ID_NO:
 				return True
-		except Exception as ex:
+		except Exception as ex:  # noqa: BLE001
 			log.error(ex)
 		return False
 
@@ -472,6 +514,7 @@ class RemoteClient:
 				port=self.lastFailAddress[1],
 				key=self.lastFailKey,
 				insecure=True,
+				trustedFingerprint=self._lastFailFingerprint,
 			)
 			self.connectAsLeader(connectionInfo=connectionInfo)
 
@@ -484,6 +527,7 @@ class RemoteClient:
 				port=self.lastFailAddress[1],
 				key=self.lastFailKey,
 				insecure=True,
+				trustedFingerprint=self._lastFailFingerprint,
 			)
 			self.connectAsFollower(connectionInfo=connectionInfo)
 

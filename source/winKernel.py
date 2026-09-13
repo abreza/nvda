@@ -1,8 +1,8 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2006-2025 NV Access Limited, Rui Batista, Aleksey Sadovoy, Peter Vagner,
+# Copyright (C) 2006-2026 NV Access Limited, Rui Batista, Aleksey Sadovoy, Peter Vagner,
 # Mozilla Corporation, Babbage B.V., Joseph Lee, Łukasz Golonka
-# This file is covered by the GNU General Public License.
-# See the file COPYING for more details.
+# This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
+# For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
 """
 Functions that wrap Windows API functions from kernel32.dll and advapi32.dll.
@@ -10,22 +10,20 @@ Functions that wrap Windows API functions from kernel32.dll and advapi32.dll.
 When working on this file, consider moving to winAPI.
 """
 
-import contextlib
+import contextlib  # noqa: I001
 import ctypes
 import ctypes.wintypes
 from ctypes import byref, sizeof, Structure, WinError
 from ctypes.wintypes import BOOL, DWORD, HANDLE, LARGE_INTEGER, LCID, LPVOID
 from typing import (
 	TYPE_CHECKING,
-	Optional,
-	Union,
 )
 
 if TYPE_CHECKING:
 	from winAPI._powerTracking import SystemPowerStatus
 
 
-import winBindings.advapi32
+import winBindings.advapi32  # noqa: I001
 import winBindings.kernel32
 from winBindings.kernel32 import (
 	FILETIME as _FILETIME,
@@ -71,6 +69,9 @@ __getattr__ = _deprecate.handleDeprecations(
 		"winBindings.kernel32",
 	),
 	_deprecate.MovedSymbol("advapi32", "winBindings.advapi32", "dll"),
+	_deprecate.MovedSymbol("DUPLICATE_SAME_ACCESS", "winBindings.kernel32", "DUPLICATE", "SAME_ACCESS"),
+	_deprecate.MovedSymbol("GENERIC_READ", "winBindings.kernel32", "GENERIC", "READ"),
+	_deprecate.MovedSymbol("GENERIC_WRITE", "winBindings.kernel32", "GENERIC", "WRITE"),
 )
 
 
@@ -119,8 +120,6 @@ def GetStdHandle(handleID):
 	return h
 
 
-GENERIC_READ = 0x80000000
-GENERIC_WRITE = 0x40000000
 FILE_SHARE_READ = 1
 FILE_SHARE_WRITE = 2
 FILE_SHARE_DELETE = 4
@@ -218,7 +217,7 @@ def setWaitableTimer(
 def openProcess(*args) -> int:
 	try:
 		return winBindings.kernel32.OpenProcess(*args) or 0
-	except Exception:
+	except Exception:  # noqa: BLE001
 		# Compatibility: error should just be a handle of 0.
 		return 0
 
@@ -261,7 +260,7 @@ def suspendWow64Redirection():
 	try:
 		yield
 	finally:
-		if redirectionDisabled:
+		if redirectionDisabled:  # noqa: SIM102
 			if winBindings.kernel32.Wow64RevertWow64FsRedirection(oldValue) == 0:
 				raise WinError()
 
@@ -284,7 +283,7 @@ def FileTimeToSystemTime(lpFileTime: _FILETIME, lpSystemTime: _SYSTEMTIME) -> No
 
 
 def SystemTimeToTzSpecificLocalTime(
-	timeZoneInformation: Union[_TIME_ZONE_INFORMATION, None],
+	timeZoneInformation: _TIME_ZONE_INFORMATION | None,
 	lpUniversalTime: _SYSTEMTIME,
 	lpLocalTime: _SYSTEMTIME,
 ) -> None:
@@ -411,7 +410,7 @@ class SECURITY_ATTRIBUTES(Structure):
 	)
 
 	def __init__(self, **kwargs):
-		super(SECURITY_ATTRIBUTES, self).__init__(nLength=sizeof(self), **kwargs)
+		super().__init__(nLength=sizeof(self), **kwargs)
 
 
 def CreatePipe(pipeAttributes, size):
@@ -473,9 +472,6 @@ def OpenProcessToken(ProcessHandle, DesiredAccess):
 	return token.value
 
 
-DUPLICATE_SAME_ACCESS = 0x00000002
-
-
 def DuplicateHandle(
 	sourceProcessHandle,
 	sourceHandle,
@@ -520,7 +516,7 @@ class HGLOBAL(HANDLE):
 		@param autoFree: True by default, the handle will automatically be freed with GlobalFree
 		when this object goes out of scope.
 		"""
-		super(HGLOBAL, self).__init__(h)
+		super().__init__(h)
 		self._autoFree = autoFree
 
 	def __del__(self):
@@ -585,7 +581,7 @@ def SetThreadExecutionState(esFlags):
 	return res
 
 
-def LCIDToLocaleName(windowsLCID: LCID) -> Optional[str]:
+def LCIDToLocaleName(windowsLCID: LCID) -> str | None:
 	# NVDA cannot run with this imported at module level
 	from logHandler import log
 

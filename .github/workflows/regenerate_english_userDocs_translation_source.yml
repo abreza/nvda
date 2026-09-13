@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   rebuild-translation-source:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
 
     steps:
     - name: Early exit
@@ -28,13 +28,13 @@ jobs:
         GH_REPO: ${{ github.repository }}
 
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
         token: ${{ secrets.NVACCESSAUTO_PUSH_PAT }}
 
     - name: Set up python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.13'
         architecture: 'x86'
@@ -50,6 +50,7 @@ jobs:
         # for any English markdown files changed within the commits of this push,
         # update the corresponding xliff file (if one exists) to reflect the current markdown file,
         # keeping existing translation IDs in tact.
+        $PSNativeCommandUseErrorActionPreference = $true
         $ErrorActionPreference = 'Stop'
         $changedFiles = git diff --name-only ${{github.event.before}}.. -- user_docs/en/*.md
         foreach ($file in $changedFiles) {

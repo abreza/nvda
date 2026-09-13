@@ -1,16 +1,17 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2025 NV Access Limited
+# Copyright (C) 2025-2026 NV Access Limited, Cary-rowen, Christopher Proß
 # This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
 # For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
 """Functions exported by user32.dll, and supporting data structures and enumerations."""
 
-from ctypes import (
+from ctypes import (  # noqa: I001
 	Structure,
 	WINFUNCTYPE,
 	Union,
 	c_int,
 	c_size_t,
+	c_ssize_t,
 	c_uint,
 	c_long,
 	c_longlong,
@@ -32,6 +33,7 @@ from ctypes.wintypes import (
 	LPDWORD,
 	LPPOINT,
 	LPRECT,
+	LPVOID,
 	PBYTE,
 	PHANDLE,
 	PMSG,
@@ -61,6 +63,7 @@ from enum import IntEnum, IntFlag
 
 UINT_PTR = c_size_t
 ULONG_PTR = c_size_t
+LONG_PTR = c_ssize_t
 DWORD_PTR = c_size_t
 PDWORD_PTR = POINTER(DWORD_PTR)
 
@@ -92,18 +95,18 @@ WNDPROC = WINFUNCTYPE(LRESULT, HWND, c_uint, WPARAM, LPARAM)
 
 class WNDCLASSEXW(Structure):
 	_fields_ = [
-		("cbSize", c_uint),  # noqa: F405
-		("style", c_uint),  # noqa: F405
+		("cbSize", c_uint),
+		("style", c_uint),
 		("lpfnWndProc", WNDPROC),
 		("cbClsExtra", c_int),
 		("cbWndExtra", c_int),
-		("hInstance", HINSTANCE),  # noqa: F405
-		("hIcon", HICON),  # noqa: F405
+		("hInstance", HINSTANCE),
+		("hIcon", HICON),
 		("HCURSOR", HCURSOR),
-		("hbrBackground", HBRUSH),  # noqa: F405
-		("lpszMenuName", LPWSTR),  # noqa: F405
-		("lpszClassName", LPWSTR),  # noqa: F405
-		("hIconSm", HICON),  # noqa: F405
+		("hbrBackground", HBRUSH),
+		("lpszMenuName", LPWSTR),
+		("lpszClassName", LPWSTR),
+		("hIconSm", HICON),
 	]
 
 
@@ -137,7 +140,7 @@ GetMessage.argtypes = (
 )
 GetMessage.restype = BOOL
 
-HOOKPROC = WINFUNCTYPE(LRESULT, c_int, WPARAM, LPARAM)  # noqa: F405
+HOOKPROC = WINFUNCTYPE(LRESULT, c_int, WPARAM, LPARAM)
 
 SetWindowsHookEx = WINFUNCTYPE(None)(("SetWindowsHookExW", dll))
 SetWindowsHookEx.argtypes = (
@@ -162,6 +165,21 @@ DefWindowProc.argtypes = (
 	LPARAM,
 )
 DefWindowProc.restype = LRESULT
+
+CallWindowProc = WINFUNCTYPE(None)(("CallWindowProcW", dll))
+"""Passes message information to the specified window procedure.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-callwindowprocw
+"""
+CallWindowProc.restype = LRESULT
+CallWindowProc.argtypes = (
+	WNDPROC,  # lpPrevWndFunc: The previous window procedure.
+	HWND,  # hWnd
+	UINT,  # Msg
+	WPARAM,  # wParam
+	LPARAM,  # lParam
+)
 
 HWINEVENTHOOK = HANDLE
 """
@@ -509,6 +527,21 @@ Determines whether the specified window handle identifies an existing window.
 """
 IsWindow.restype = BOOL
 IsWindow.argtypes = (
+	HWND,  # hWnd: A handle to the window to be tested
+)
+
+IsHungAppWindow = WINFUNCTYPE(None)(("IsHungAppWindow", dll))
+"""
+Determines whether the system considers that a specified application is not responding.
+An application is considered to be not responding if it is not waiting for input,
+is not in startup processing, and has not called PeekMessage within the internal
+timeout period (5 seconds).
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-ishungappwindow
+"""
+IsHungAppWindow.restype = BOOL
+IsHungAppWindow.argtypes = (
 	HWND,  # hWnd: A handle to the window to be tested
 )
 
@@ -970,6 +1003,42 @@ IsWindowEnabled.argtypes = (
 )
 
 
+class COMBOBOXINFO(Structure):
+	"""
+	Contains status information for a combo box.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-comboboxinfo
+	"""
+
+	_fields_ = (
+		("cbSize", DWORD),
+		("rcItem", RECT),
+		("rcButton", RECT),
+		("stateButton", DWORD),
+		("hwndCombo", HWND),
+		("hwndItem", HWND),
+		("hwndList", HWND),
+	)
+
+
+PCOMBOBOXINFO = POINTER(COMBOBOXINFO)
+
+
+GetComboBoxInfo = WINFUNCTYPE(None)(("GetComboBoxInfo", dll))
+"""
+Retrieves information about the specified combo box.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getcomboboxinfo
+"""
+GetComboBoxInfo.restype = BOOL
+GetComboBoxInfo.argtypes = (
+	HWND,  # hwndCombo: Handle to the combo box.
+	PCOMBOBOXINFO,  # pcbi: Pointer to the structure that receives the combo box information.
+)
+
+
 class GUITHREADINFO(Structure):
 	"""
 	Contains information about a GUI thread.
@@ -1024,6 +1093,33 @@ SetWindowLong.argtypes = (
 	HWND,  # hWnd: Handle to the window and, indirectly, the class to which the window belongs.
 	c_int,  # nIndex: Zero-based offset to the value to be set
 	LONG,  # dwNewLong: The replacement value
+)
+
+
+class GWLP(IntEnum):
+	"""Possible special values of the ``nIndex`` parameter to the ``SetWindowLongPtr`` function.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowlongptrw
+	"""
+
+	WNDPROC = -4
+	"""Sets a new address for the window procedure."""
+
+
+# On 32-bit Windows, SetWindowLongPtr is a macro alias for SetWindowLong and is not exported separately.
+_setWindowLongPtrName = "SetWindowLongW" if sizeof(c_void_p) == sizeof(LONG) else "SetWindowLongPtrW"
+SetWindowLongPtr = WINFUNCTYPE(None)((_setWindowLongPtrName, dll))
+"""Changes an attribute of the specified window.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowlongptrw
+"""
+SetWindowLongPtr.restype = LONG_PTR
+SetWindowLongPtr.argtypes = (
+	HWND,  # hWnd: handle to the window and, indirectly, the class to which it belongs.
+	c_int,  # nIndex: The zero-based, non-negative  offset to the value to be set, or a recognised special value.
+	LPVOID,  # dwNewLong: The replacement value.
 )
 
 
@@ -1396,6 +1492,30 @@ SetProcessDpiAwarenessContext.argtypes = (
 	DPI_AWARENESS_CONTEXT,  # value: A DPI_AWARENESS_CONTEXT handle to set
 )
 
+SetThreadDpiAwarenessContext = WINFUNCTYPE(None)(("SetThreadDpiAwarenessContext", dll))
+"""
+Set the DPI awareness for the current thread to the provided value.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setthreaddpiawarenesscontext
+"""
+SetThreadDpiAwarenessContext.restype = DPI_AWARENESS_CONTEXT
+SetThreadDpiAwarenessContext.argtypes = (
+	DPI_AWARENESS_CONTEXT,  # dpiContext: The new DPI_AWARENESS_CONTEXT for the current thread
+)
+
+GetWindowDpiAwarenessContext = WINFUNCTYPE(None)(("GetWindowDpiAwarenessContext", dll))
+"""
+Returns the DPI_AWARENESS_CONTEXT associated with a window.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowdpiawarenesscontext
+"""
+GetWindowDpiAwarenessContext.restype = DPI_AWARENESS_CONTEXT
+GetWindowDpiAwarenessContext.argtypes = (
+	HWND,  # hwnd: The window to query
+)
+
 SetProcessDPIAware = WINFUNCTYPE(None)(("SetProcessDPIAware", dll))
 """
 Sets the process-default DPI awareness to system-DPI awareness.
@@ -1518,6 +1638,47 @@ GetWindowRect.argtypes = (
 	HWND,  # hWnd: Handle to the window
 	LPRECT,  # lpRect: RECT that receives the screen coordinates of the upper-left and lower-right corners of the window
 )
+
+
+GetMenu = WINFUNCTYPE(None)(("GetMenu", dll))
+"""
+Retrieves a handle to the menu assigned to the specified window.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmenu
+"""
+GetMenu.restype = HMENU
+GetMenu.argtypes = (
+	HWND,  # hWnd: Handle to the window whose menu handle is to be retrieved
+)
+
+GetMenuItemCount = WINFUNCTYPE(None)(("GetMenuItemCount", dll))
+"""
+Determines the number of items in the specified menu.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmenuitemcount
+"""
+GetMenuItemCount.restype = c_int
+GetMenuItemCount.argtypes = (
+	HMENU,  # hMenu: Handle to the menu to be examined
+)
+
+GetMenuItemRect = WINFUNCTYPE(None)(("GetMenuItemRect", dll))
+"""
+Retrieves the bounding rectangle of the specified menu item.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmenuitemrect
+"""
+GetMenuItemRect.restype = BOOL
+GetMenuItemRect.argtypes = (
+	HWND,  # hWnd: Handle to the window containing the menu
+	HMENU,  # hMenu: Handle to the menu
+	UINT,  # uItem: Zero-based position of the menu item
+	LPRECT,  # lprcItem: RECT that receives the bounding rectangle in screen coordinates
+)
+
 IsWindowUnicode = WINFUNCTYPE(None)(("IsWindowUnicode", dll))
 """
 Determines whether the specified window is a native Unicode window.
@@ -1610,4 +1771,68 @@ Returns the dots per inch (dpi) value for the specified window.
 GetDpiForWindow.restype = UINT
 GetDpiForWindow.argtypes = (
 	HWND,  # hwnd: The window that you want to get information about
+)
+
+GetClientRect = WINFUNCTYPE(None)(("GetClientRect", dll))
+"""
+Retrieves the coordinates of a window's client area.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclientrect
+"""
+GetClientRect.restype = BOOL
+GetClientRect.argtypes = (
+	HWND,  # hWnd: Handle to the window whose client rectangle is to be retrieved
+	LPRECT,  # lpRect: Pointer to a RECT structure that receives the client rectangle coordinates
+)
+
+
+class NMHDR(Structure):
+	"""Contains information about a notification message.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-nmhdr
+	"""
+
+	_fields_ = (
+		("hwndFrom", HWND),
+		("idFrom", UINT_PTR),
+		("code", UINT),
+	)
+
+
+class EWX(IntFlag):
+	"""The shutdown type requested by a call to ExitWindowsEx."""
+
+	REBOOT = 0x00000002
+	"""EWX_REBOOT: Shuts down and then restarts the system."""
+	RESTARTAPPS = 0x00000040
+	"""EWX_RESTARTAPPS: Shuts down and restarts the system, as well as any applications that have been registered for restart using the RegisterApplicationRestart function."""
+
+
+class SHTDN_REASON(IntFlag):
+	"""Possible values of the dwReason parameter of the ExitWindowsEx function.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/shutdown/system-shutdown-reason-codes
+	"""
+
+	MAJOR_APPLICATION = 0x00040000
+	"""SHTDN_REASON_MAJOR_APPLICATION: Application issue."""
+	MINOR_INSTALLATION = 0x00000002
+	"""SHTDN_REASON_MINOR_INSTALLATION: Installation."""
+	FLAG_PLANNED = 0x80000000
+	"""SHTDN_REASON_FLAG_PLANNED: The shutdown was planned, so the system generates a System State Data (SSD) file containing information such as the processes, threads, memory usage, and configuration."""
+
+
+ExitWindowsEx = WINFUNCTYPE(None)(("ExitWindowsEx", dll))
+"""Logs off the interactive user, shuts down the system, or shuts down and restarts the system.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-exitwindowsex
+"""
+ExitWindowsEx.restype = BOOL
+ExitWindowsEx.argtypes = (
+	UINT,  # uFlags: The shutdown type.
+	DWORD,  # dwReason: The reason for initiating the shutdown.
 )

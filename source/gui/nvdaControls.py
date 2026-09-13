@@ -1,16 +1,13 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2016-2025 NV Access Limited, Derek Riemer, Cyrille Bougot, Luke Davis, Leonard de Ruijter
+# Copyright (C) 2016-2026 NV Access Limited, Derek Riemer, Cyrille Bougot, Luke Davis, Leonard de Ruijter
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
 
-import collections
+import collections  # noqa: I001
+from ctypes import addressof
 import enum
 import typing
-from typing import (
-	List,
-	OrderedDict,
-	Type,
-)
+from collections import OrderedDict
 import warnings
 
 import wx
@@ -23,6 +20,9 @@ from config.featureFlag import (
 )
 import gui.message
 from winBindings import user32
+from winBindings.commCtrl import LVIF, LVIS, LVITEM, LVM, LVN, NMLISTVIEW
+from winBindings.user32 import GWLP, NMHDR, WNDPROC, CallWindowProc, SendMessage, SetWindowLongPtr
+from winUser import WM_NOTIFY
 from .dpiScalingHelper import DpiScalingHelperMixin
 from . import (
 	guiHelper,
@@ -33,16 +33,16 @@ from collections.abc import Callable
 
 
 __all__ = [
-	"AutoWidthColumnListCtrl",
-	"SelectOnFocusSpinCtrl",
-	"ListCtrlAccessible",
-	"CustomCheckListBox",
 	"AutoWidthColumnCheckListCtrl",
+	"AutoWidthColumnListCtrl",
+	"CustomCheckListBox",
 	"DPIScaledDialog",
-	"MessageDialog",
-	"_ContinueCancelDialog",
 	"EnhancedInputSlider",
 	"FeatureFlagCombo",
+	"ListCtrlAccessible",
+	"MessageDialog",
+	"SelectOnFocusSpinCtrl",
+	"_ContinueCancelDialog",
 ]
 
 
@@ -88,7 +88,7 @@ class AutoWidthColumnListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
 		self._itemTextCallable = None
 
 	def _super_itemTextCallable(self, item, column):
-		return super(AutoWidthColumnListCtrl, self).OnGetItemText(item, column)
+		return super().OnGetItemText(item, column)
 
 	def OnGetItemText(self, item, column):
 		return self._itemTextCallable(item, column)
@@ -157,7 +157,7 @@ class CustomCheckListBox(wx.CheckListBox):
 	"""Custom checkable list to fix a11y bugs in the standard wx checkable list box."""
 
 	def __init__(self, *args, **kwargs):
-		super(CustomCheckListBox, self).__init__(*args, **kwargs)
+		super().__init__(*args, **kwargs)
 		# Register a custom wx.Accessible implementation to fix accessibility incompleties
 		self.SetAccessible(ListCtrlAccessible(self))
 		# Register ourself with ourself's selected event, so that we can notify winEvent of the state change.
@@ -220,7 +220,7 @@ class AutoWidthColumnCheckListCtrl(AutoWidthColumnListCtrl, listmix.CheckListCtr
 
 	def SetCheckedItems(self, indexes):
 		for i in indexes:
-			assert 0 <= i < self.ItemCount, "Index (%s) out of range" % i
+			assert 0 <= i < self.ItemCount, "Index (%s) out of range" % i  # noqa: UP031
 		for i in range(self.ItemCount):
 			self.CheckItem(i, i in indexes)
 
@@ -288,7 +288,7 @@ class MessageDialog(gui.message.MessageDialog):
 	"""Provides a more flexible message dialog.
 
 	.. warning:: This class is deprecated.
-		Use :class:`gui.messageDialog.MessageDialog` instead.
+		Use :class:`gui.message.MessageDialog` instead.
 		This class is an adapter around that class, and will be removed in 2026.1.
 
 	Consider overriding _addButtons, to set your own buttons and behaviour.
@@ -315,7 +315,7 @@ class MessageDialog(gui.message.MessageDialog):
 
 	def __new__(cls, *args, **kwargs):
 		warnings.warn(
-			"gui.nvdaControls.MessageDialog is deprecated. Use gui.messageDialog.MessageDialog instead.",
+			"gui.nvdaControls.MessageDialog is deprecated. Use gui.message.MessageDialog instead.",
 			DeprecationWarning,
 		)
 		return super().__new__(cls, *args, **kwargs)
@@ -394,11 +394,11 @@ class _ContinueCancelDialog(MessageDialog):
 
 class EnhancedInputSlider(wx.Slider):
 	def __init__(self, *args, **kwargs):
-		super(EnhancedInputSlider, self).__init__(*args, **kwargs)
+		super().__init__(*args, **kwargs)
 		self.Bind(wx.EVT_CHAR, self.onSliderChar)
 
 	def SetValue(self, i):
-		super(EnhancedInputSlider, self).SetValue(i)
+		super().SetValue(i)
 		evt = wx.CommandEvent(wx.wxEVT_COMMAND_SLIDER_UPDATED, self.GetId())
 		evt.SetInt(i)
 		self.ProcessEvent(evt)
@@ -438,7 +438,7 @@ class FeatureFlagCombo(wx.Choice):
 	def __init__(
 		self,
 		parent: wx.Window,
-		keyPath: List[str],
+		keyPath: list[str],
 		conf: config.ConfigManager,
 		pos=wx.DefaultPosition,
 		size=wx.DefaultSize,
@@ -461,7 +461,7 @@ class FeatureFlagCombo(wx.Choice):
 		self._confPath = keyPath
 		self._conf = conf
 		configValue = self._getConfigValue()
-		self._optionsEnumClass: Type[FeatureFlagEnumT] = configValue.enumClassType
+		self._optionsEnumClass: type[FeatureFlagEnumT] = configValue.enumClassType
 		translatedOptions: typing.OrderedDict[FeatureFlagEnumT, str] = collections.OrderedDict(
 			{
 				value: value.displayString
@@ -503,7 +503,7 @@ class FeatureFlagCombo(wx.Choice):
 	def _getConfSpecDefaultValue(self) -> FeatureFlagEnumT:
 		defaultValueFromSpec = self._conf.getConfigValidation(self._confPath).default
 		if not isinstance(defaultValueFromSpec, FeatureFlag):
-			raise ValueError(f"Default spec value is not a FeatureFlag, but {type(defaultValueFromSpec)}")
+			raise ValueError(f"Default spec value is not a FeatureFlag, but {type(defaultValueFromSpec)}")  # noqa: TRY004
 		return defaultValueFromSpec.value
 
 	def _getConfigValue(self) -> FeatureFlag:
@@ -516,7 +516,7 @@ class FeatureFlagCombo(wx.Choice):
 			conf = conf[nextKey]
 
 		if not isinstance(conf, FeatureFlag):
-			raise ValueError(f"Config value is not a FeatureFlag, but a {type(conf)}")
+			raise ValueError(f"Config value is not a FeatureFlag, but a {type(conf)}")  # noqa: TRY004
 		return conf
 
 	def isValueConfigSpecDefault(self) -> bool:
@@ -573,3 +573,107 @@ class FeatureFlagCombo(wx.Choice):
 				**translatedOptions,
 			},
 		)
+
+
+class _CheckListCtrl(AutoWidthColumnListCtrl):  # pyright: ignore[reportUnusedClass]
+	"""A list control with checkboxes that supports removing checkboxes from individual items.
+
+	This subclasses :class:`AutoWidthColumnListCtrl` and enables checkboxes by default.
+	Individual checkboxes can be removed via :meth:`removeCheckbox`, which also prevents
+	the user from toggling the state image for that item by subclassing the parent window's
+	window procedure to intercept ``LVN_ITEMCHANGING`` notifications.
+	"""
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.EnableCheckBoxes(True)
+		self._newWndProc: WNDPROC | None = None
+		self._oldWndProc: WNDPROC | None = None
+		self._checkboxlessIndices: set[int] = set()
+		self._hookWndProc()
+		self.Bind(wx.EVT_WINDOW_DESTROY, self._onDestroy, self)
+
+	def _hookWndProc(self):
+		"""Subclass the parent window's window procedure to intercept list-view notifications.
+
+		:raises RuntimeError: If the window procedure has already been hooked.
+		"""
+		if self._newWndProc is not None or self._oldWndProc is not None:
+			raise RuntimeError("Window proc already hooked!")
+		self._newWndProc = WNDPROC(self._WndProc)
+		self._oldWndProc = WNDPROC(
+			SetWindowLongPtr(self.GetParent().GetHandle(), GWLP.WNDPROC, self._newWndProc),
+		)
+
+	def _unhookWndProc(self):
+		"""Restore the parent window's original window procedure."""
+		if self._oldWndProc is not None:
+			SetWindowLongPtr(self.GetParent().GetHandle(), GWLP.WNDPROC, self._oldWndProc)
+			self._oldWndProc = self._newWndProc = None
+
+	def _onDestroy(self, evt: wx.WindowDestroyEvent) -> None:
+		self._unhookWndProc()
+
+	def _WndProc(self, hWnd: int, msg: int, wParam: int, lParam: int) -> int:
+		"""Window procedure that blocks state image changes for checkboxless items.
+
+		Intercepts ``LVN_ITEMCHANGING`` notifications and prevents state image transitions
+		for items whose checkboxes have been removed.
+
+		:param hWnd: Handle to the window.
+		:param msg: The message identifier.
+		:param wParam: Additional message information.
+		:param lParam: Additional message information.
+		:return: A non-zero ``LRESULT`` to block the change, otherwise the result of calling the original window procedure.
+		"""
+		if msg == WM_NOTIFY:
+			hdr = NMHDR.from_address(lParam)
+			if hdr.hwndFrom == self.GetHandle() and hdr.code == LVN.ITEMCHANGING:
+				hdr = NMLISTVIEW.from_address(lParam)
+				if (
+					hdr.iItem in self._checkboxlessIndices
+					and hdr.uChanged & LVIF.STATE
+					and hdr.uNewState >> 12 != hdr.uOldState >> 12
+				):
+					return 1
+		return CallWindowProc(self._oldWndProc, hWnd, msg, wParam, lParam)
+
+	def IsItemChecked(self, item: int) -> bool:
+		"""Check whether the item at the given index is checked.
+
+		Always returns ``False`` for items whose checkbox has been removed.
+
+		:param item: The zero-based index of the item to query.
+		:return: Whether the item is checked.
+		"""
+		if item in self._checkboxlessIndices:
+			return False
+		return super().IsItemChecked(item)
+
+	def removeCheckbox(self, itemIndex: int) -> bool:
+		"""Remove the checkbox from the item at the given index.
+
+		The item's state image is cleared and future check-state changes are blocked.
+		If the checkbox has already been removed, this is a no-op.
+
+		:param itemIndex: The zero-based index of the item.
+		:returns: ``True`` if the checkbox was removed, ``False`` otherwise.
+		:raises IndexError: If ``itemIndex`` is out of range.
+		"""
+		if itemIndex not in range(self.GetItemCount()):
+			raise IndexError("Item index out of range")
+		if itemIndex in self._checkboxlessIndices:
+			return False
+		lvi = LVITEM(
+			stateMask=LVIS.STATEIMAGEMASK,
+			state=0,
+		)
+		res = SendMessage(
+			self.GetHandle(),
+			LVM.SETITEMSTATE,
+			itemIndex,
+			addressof(lvi),
+		)
+		if res:
+			self._checkboxlessIndices.add(itemIndex)
+		return bool(res)

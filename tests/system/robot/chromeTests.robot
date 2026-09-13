@@ -1,5 +1,5 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2019-2025 NV Access Limited, Cyrille Bougot
+# Copyright (C) 2019-2026 NV Access Limited, Cyrille Bougot, Leonard de Ruijter
 # This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
 # For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
@@ -246,3 +246,39 @@ styleNav
 	[Documentation]	Same style navigation
 	[Tags]	chrome_misc
 	test_styleNav
+Clickable navigation
+	[Documentation]	Navigate between clickable elements using unassigned quick navigation commands
+	[Tags]	chrome_misc
+	test_clickableNavigation
+Native selection mode focus mode caret movement
+	[Documentation]	The caret can be moved in focus mode while native selection mode is enabled (#19075)
+	[Tags]	chrome_misc
+	test_nativeSelectionMode_focusModeCaretMovement
+
+## chrome_link tests
+### Link destination reporting (NVDA+K)
+
+Report link destination plain link
+	[Documentation]	NVDA+K reports the URL of a plain link.
+	[Tags]	chrome_link
+	test_reportLinkDestination_plainLink
+Report link destination nested strong
+	[Documentation]	NVDA+K reports the URL when caret is on text inside a strong tag within a link (#17363).
+	[Tags]	chrome_link
+	test_reportLinkDestination_nestedStrong
+Report link destination nested em
+	[Documentation]	NVDA+K reports the URL when caret is on text inside an em tag within a link (#17363).
+	[Tags]	chrome_link
+	test_reportLinkDestination_nestedEm
+Report link destination deeply nested
+	[Documentation]	NVDA+K reports the URL when caret is on deeply nested elements within a link (#17363).
+	[Tags]	chrome_link
+	test_reportLinkDestination_deeplyNested
+Report link destination image link
+	[Documentation]	NVDA+K reports the URL of an image link (#14779).
+	[Tags]	chrome_link
+	test_reportLinkDestination_imageLink
+Report link destination not a link
+	[Documentation]	NVDA+K reports 'Not a link' when caret is not on a link.
+	[Tags]	chrome_link
+	test_reportLinkDestination_notALink

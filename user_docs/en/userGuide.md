@@ -28,13 +28,14 @@ Major highlights include:
 * Ability to [connect to and control another computer running NVDA](#RemoteAccess) for remote assistance or collaboration
 * Ability to run entirely from a USB flash drive or other portable media without the need for installation
 * Easy to use talking installer
-* Translated into 55 languages
+* Translated into 56 languages
 * Support for [modern Windows Operating Systems](#MinimumSystemRequirements)
 * Ability to run during Windows sign-in and [other secure screens](#SecureScreens)
 * Announcing controls and text while using touch gestures
 * Support for common accessibility interfaces such as Microsoft Active Accessibility, Java Access Bridge, IAccessible2 and UI Automation
 * Support for Windows Command Prompt and console applications
 * The ability to highlight the system focus
+* Built-in screen magnification and color filtering
 
 ### System Requirements {#SystemRequirements}
 
@@ -42,7 +43,7 @@ Major highlights include:
 
 * Operating Systems: 64-bit editions of Windows 10 and Windows 11.
 Windows Server 2016, 2019, 2022 and 2025.
-  * both AMD64 and ARM64 variants of Windows 11 are supported, including Copilot+ PCs.
+  * Both AMD64 and ARM64 variants of Windows 11 are supported, including Copilot+ PCs.
   * Note that ARM64 Windows 10 is not supported.
   * Note that Windows 10 versions older than 22H2 and Windows Server versions older than 2022 are no longer under active support by NV Access.
 * at least 500 MB of storage space.
@@ -50,7 +51,7 @@ Windows Server 2016, 2019, 2022 and 2025.
 #### Recommended System Requirements {#RecommendedSystemRequirements}
 
 * Operating Systems: Windows 11 or Windows 10 (Version 22H2), and Windows Server 2025 or 2022.
-  * both AMD64 and ARM64 variants of Windows 11 are supported, including Copilot+ PCs.
+  * Both AMD64 and ARM64 variants of Windows 11 are supported, including Copilot+ PCs.
   * Note that ARM64 Windows 10 is not supported.
 * at least 500 MB of storage space.
 * at least 4 GB of RAM.
@@ -58,7 +59,7 @@ Windows Server 2016, 2019, 2022 and 2025.
 ### Internationalization {#Internationalization}
 
 It is important that people anywhere in the world, no matter what language they speak, get equal access to technology.
-Besides English, NVDA has been translated into 55 languages including: Afrikaans, Albanian, Amharic, Arabic, Aragonese, Bosnian, Bulgarian, Burmese, Catalan, Chinese (simplified and traditional), Croatian, Czech, Danish, Dutch, Farsi, Finnish, French, Galician, Georgian, German (Germany and Switzerland), Greek, Hebrew, Hindi, Hungarian, Icelandic, Irish, Italian, Japanese, Kannada, Korean, Kyrgyz, Lithuanian, Macedonian, Mongolian, Nepali, Norwegian, Polish, Portuguese (Brazil and Portugal), Punjabi, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish (Colombia and Spain), Swedish, Tamil, Thai, Turkish, Ukrainian and Vietnamese.
+Besides English, NVDA has been translated into 56 languages including: Afrikaans, Albanian, Amharic, Arabic, Aragonese, Bosnian, Bulgarian, Burmese, Cambodian, Catalan, Chinese (simplified and traditional), Croatian, Czech, Danish, Dutch, Farsi, Finnish, French, Galician, Georgian, German (Germany and Switzerland), Greek, Hebrew, Hindi, Hungarian, Icelandic, Irish, Italian, Japanese, Kannada, Korean, Kyrgyz, Lithuanian, Macedonian, Mongolian, Nepali, Norwegian, Polish, Portuguese (Brazil and Portugal), Punjabi, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish (Colombia and Spain), Swedish, Tamil, Thai, Turkish, Ukrainian and Vietnamese.
 
 ### Speech Synthesizer Support {#SpeechSynthesizerSupport}
 
@@ -200,6 +201,7 @@ These set whether NVDA starts automatically.
 ### Running NVDA {#RunningNVDA}
 
 The full NVDA user guide has all the NVDA commands, split up into different sections for reference.
+From within any NVDA dialog, press `f1` to open the User Guide to the topic on the current control.
 The tables of commands are also available in the "Commands Quick Reference".
 The "Basic Training for NVDA" NVDA training module has each command in more depth with step-by-step activities.
 "Basic Training for NVDA" is available from the [NV Access Shop](http://www.nvaccess.org/shop).
@@ -245,7 +247,8 @@ The actual commands will not execute while in input help mode.
 |Read window |`NVDA+b` |`NVDA+b` |Reads the entire current window (useful for dialogs)|
 |Read status bar |`NVDA+end` |`NVDA+shift+end` |Reports the Status Bar if NVDA finds one. Pressing twice will spell the information. Pressing three times will copy it to the clipboard|
 |Read time |`NVDA+f12` |`NVDA+f12` |Pressing once reports the current time, pressing twice reports the date. The time and date are reported in the format specified in Windows settings for the system tray clock.|
-|Repeat last spoken information |`NVDA+x` |`NVDA+x` |Repeats the last information spoken by NVDA. Pressing twice shows it in a browseable window |
+| Repeat last spoken information | `NVDA+x` | `NVDA+x` | Repeats the last information spoken by NVDA. Pressing twice shows it in a browseable window |
+| Copy last spoken information | `NVDA+control+x` | `NVDA+control+x` | Copies the last information spoken by NVDA to the clipboard |
 |Report text formatting |`NVDA+f` |`NVDA+f` |Reports text formatting. Pressing twice shows the information in a window|
 |Report link destination |`NVDA+k` |`NVDA+k` |Pressing once speaks the destination URL of the link at the current caret or focus position. Pressing twice shows it in a window for more careful review|
 
@@ -371,6 +374,7 @@ Press `control+tab` to get to this tab from anywhere in the Add-on Store.
 The status of the add-on will be listed as "Update available".
 The list will display the currently installed version and the available version.
 Press `enter` on the add-on to open the actions list; choose "Update".
+If the add-on is disabled, the action will instead be labelled "Update (and enable)", as add-ons must be enabled to be installed; updating a disabled add-on re-enables it.
 
 By default, after NVDA startup, you will be notified if any add-on updates are available.
 To learn more about and configure this behaviour, refer to ["Update Notifications"](#AutomaticAddonUpdates).
@@ -391,6 +395,7 @@ This is an online exam you can complete to demonstrate your skills in NVDA.
 To get help for NVDA, press `NVDA+n` to open the menu, then `h` for help.
 From this submenu you can access the User Guide, a quick reference of commands, history of new features and more.
 These first three options open in the default web browser.
+From within any NVDA dialog, press `f1` to open the User Guide to the topic on the current control.
 There is also more comprehensive Training Material available in the [NV Access Shop](https://www.nvaccess.org/shop).
 
 We recommend starting with the "Basic Training for NVDA" module.
@@ -421,8 +426,8 @@ If you have already closed this dialog or are wanting to install from a portable
 The installation dialog that appears will confirm whether you wish to install NVDA and will also tell you whether this installation will be updating a previous install.
 Pressing the Continue button will start installing NVDA.
 There are also a few options in this dialog which are explained below.
-Once the installation has completed, a message will appear telling you that it was successful.
-Pressing OK at this point will restart the newly installed copy of NVDA.
+Once the installation has completed, a dialog will appear with options for what to do next.
+See [Restart Windows After Installation](#RestartWindowsAfterInstall) for more information.
 
 #### Incompatible add-ons warning {#InstallWithIncompatibleAddons}
 
@@ -448,6 +453,18 @@ If created, this shortcut will also be assigned a shortcut key of `control+alt+n
 This option allows you to choose whether or not NVDA should copy the user configuration from the currently running NVDA into the configuration for the currently logged on user, for the installed copy of NVDA.
 This will not copy the configuration for any other users of this system nor to the system configuration for use during Windows sign-in and [other secure screens](#SecureScreens).
 This option is only available when installing from a portable copy, not when installing directly from the downloaded Launcher package.
+
+#### Restart Windows After Installation {#RestartWindowsAfterInstall}
+
+After NVDA has been successfully installed or updated, a dialog will appear recommending that you restart Windows.
+Restarting ensures that NVDA is fully registered with the system and works correctly in all applications.
+
+The dialog provides the following options:
+
+* Restart Windows: Immediately restart Windows.
+* Start NVDA: Start the newly installed copy of NVDA without restarting.
+  * Note: this option is not available when the installer is run with elevated (administrator) privileges.
+* Exit NVDA: Close without starting NVDA or restarting Windows.
 
 ### Creating a Portable Copy {#CreatingAPortableCopy}
 
@@ -488,7 +505,8 @@ Portable and temporary copies of NVDA have the following restrictions:
   * Task Manager
   * Windows 11 Voice Access
 * The inability to read User Account Control (UAC) screens when trying to start an application with administrative privileges.
-* The inability to support input from a touchscreen.
+* NVDA ignores touch input (gestures are passed through).
+* Mouse and touch input will not work correctly with the NVDA magnifier enabled (i.e. inaccurate input).
 * The inability to provide features such as browse mode and speaking of typed characters in Windows Store apps.
 * Audio ducking is not supported.
 
@@ -596,16 +614,33 @@ There are 4 possible flick gestures depending on the direction: flick left, flic
 Just like taps, more than one finger can be used to perform the gesture.
 Therefore, gestures such as 2-finger flick up and 4-finger flick left are all possible.
 
+##### Pinch Gestures {#PinchGestures}
+
+Place two fingers on the screen and move them toward each other to perform a pinch in gesture.
+Move them away from each other to perform a pinch out gesture.
+
+##### Sequential Flicks {#SequentialFlicks}
+
+You can perform two flicks in quick succession to trigger a sequential flick gesture.
+This greatly expands the number of touch gestures that can be assigned to NVDA commands.
+
+Both flicks can be performed in two ways:
+
+* Lifting your finger after the first flick and then performing the second flick before the gesture times out.
+* Or as a single continuous swipe that sharply changes direction, without lifting your finger.
+
+Twelve combinations are recognised: the four opposite-direction pairs (such as flick right then flick left), and the eight perpendicular L-shaped pairs (such as flick right then flick up).
+
 #### Touch Modes {#TouchModes}
 
 As there are many more NVDA commands than possible touch gestures, NVDA has several touch modes you can switch between which make certain subsets of commands available.
-The two modes are text mode and object mode.
+The three modes are text mode, object mode and browse mode.
 Certain NVDA commands listed in this document may have a touch mode listed in brackets after the touch gesture.
 For example, flick up (text mode) means that the command will be performed if you flick up, but only while in text mode.
 If the command does not have a mode listed, it will work in any mode.
 
 <!-- KC:beginInclude -->
-To toggle touch modes, perform a 3-finger tap.
+To switch between touch modes, perform a 3-finger tap.
 <!-- KC:endInclude -->
 
 #### Touch keyboard {#TouchKeyboard}
@@ -651,7 +686,8 @@ When the menu comes up, You can use the arrow keys to navigate the menu, and the
 |Starts or restarts NVDA |Control+alt+n |Control+alt+n |none |Starts or restarts NVDA from the Desktop, if this Windows shortcut is enabled during NVDA's installation process. This is a Windows specific shortcut and therefore it cannot be reassigned in the input gestures dialog.|
 |Stop speech |Control |control |2-finger tap |Instantly stops speaking|
 |Pause Speech |shift |shift |none |Instantly pauses speech. Pressing it again will continue speaking where it left off (if pausing is supported by the current synthesizer)|
-|Repeat last spoken information |`NVDA+x` |`NVDA+x` |none |Repeats the last information spoken by NVDA. Pressing twice shows it in a browseable window |
+| Repeat last spoken information | `NVDA+x` | `NVDA+x` | None | Repeats the last information spoken by NVDA. Pressing twice shows it in a browseable window |
+| Copy last spoken information | `NVDA+control+x` | `NVDA+control+x` | None | Copies the last information spoken by NVDA to the clipboard |
 |NVDA Menu |NVDA+n |NVDA+n |2-finger double-tap |Pops up the NVDA menu to allow you to access preferences, tools, help, etc.|
 |Toggle Input Help Mode |NVDA+1 |NVDA+1 |none |Pressing any key in this mode will report the key, and the description of any NVDA command associated with it|
 |Quit NVDA |NVDA+q |NVDA+q |none |Exits NVDA|
@@ -752,8 +788,8 @@ NVDA provides the following key commands in relation to the system caret:
 |Report language |none |none |Reports text language. Pressing twice shows the information in a window|
 |Report link destination |`NVDA+k` |`NVDA+k` |Pressing once speaks the destination URL of the link at the current caret or focus position. Pressing twice shows it in a window for more careful review|
 |Report caret location |NVDA+numpadDelete |NVDA+delete |Reports information about the location of the text or object at the position of system caret. For example, this might include the percentage through the document, the distance from the edge of the page or the exact screen position. Pressing twice may provide further detail.|
-|Next sentence |alt+downArrow |alt+downArrow |Moves the caret to the next sentence and announces it. (only supported in Microsoft Word and Outlook)|
-|Previous sentence |alt+upArrow |alt+upArrow |Moves the caret to the previous sentence and announces it. (only supported in Microsoft Word and Outlook)|
+| Next sentence | `alt+downArrow` | `alt+downArrow` | Moves the caret to the next sentence and announces it. Some documents are not supported |
+| Previous sentence | `alt+upArrow` | `alt+upArrow` | Moves the caret to the previous sentence and announces it. Some documents are not supported |
 
 When within a table, the following key commands are also available:
 
@@ -1050,6 +1086,36 @@ If you want to use these while still being able to use your cursor keys to read 
 To toggle single letter navigation on and off for the current document, press NVDA+shift+space.
 <!-- KC:endInclude -->
 
+#### Touch Navigation in Browse Mode {#BrowseModeTouch}
+
+When using a touch enabled device, NVDA provides an additional touch navigation mode for browsing content in browse mode.
+
+When browse mode is active in supported documents such as web pages or Word documents, NVDA can expose a browse touch mode.
+This mode allows users to navigate structural elements of a document using touch gestures, similar to browse mode navigation with the keyboard.
+
+In browse touch mode, flick gestures are used to move between common document elements such as links, buttons, headings, form fields, landmarks, and other document structures.
+
+##### Touch gestures in browse mode
+
+<!-- KC:beginInclude -->
+
+| Name | Touch | Description |
+|---|---|---|
+| Select next element type | flick down | Switches to the next browse mode navigation element type |
+| Select previous element type | flick up | Switches to the previous browse mode navigation element type |
+| Move to next element | flick right | Moves to the next browse mode element of the selected type |
+| Move to previous element | flick left | Moves to the previous browse mode element of the selected type |
+
+<!-- KC:endInclude -->
+
+When the "default" element type is selected, flicking left or right moves through all elements in the document.
+When any other element type is selected, flicking left or right moves to the previous or next element of that type.
+Flicking up or down cycles through the available element types.
+
+The selected element type is remembered separately for each document while it remains open.
+Note that browse touch mode gestures only take effect when browse mode is active in the document.
+If focus moves outside the document (for example, to the browser address bar or the taskbar), browse touch mode gestures will not navigate the document until focus returns to it in browse mode.
+
 #### Text paragraph navigation command {#TextNavigationCommand}
 
 You can jump to the next or previous text paragraph by pressing `p` or `shift+p`.
@@ -1083,6 +1149,8 @@ Here is a list of available commands:
 * Menu item
 * Toggle button
 * Progress bar
+* Slider
+* Clickable element
 * Reference
 * Math formula
 * Vertically aligned paragraph
@@ -1119,6 +1187,7 @@ This dialog allows you to search for terms in the current document.
 In the "Type the text you wish to find" field, the text to be found can be entered.
 The "Case sensitive" checkbox makes the search consider uppercase and lowercase letters differently.
 For example, with "Case sensitive" selected you can find "NV Access" but not "nv access".
+When the [Keep search history](#SearchHistory) browse mode setting is enabled, this field is a combo box that also offers the terms you have recently searched for (up to 20), which are cleared when NVDA restarts.
 Use the following keys for performing searches:
 <!-- KC:beginInclude -->
 
@@ -1150,13 +1219,16 @@ A key command is provided to return to the original page containing the embedded
 
 By default when selecting text with the `shift+arrow` keys in Browse Mode, a selection is only made within NVDA's Browse Mode representation of the document, and not within the application itself.
 This means that the selection is not visible on screen, and copying text with `control+c` will only copy NVDA's plain text representation of the content. i.e. formatting of tables, or whether something is a link will not be copied.
-However, NVDA has a Native Selection Mode which can be turned on in particular Browse Mode documents which can support it.
+However, NVDA has a Native Selection Mode which can be toggled on or off in Browse Mode documents that support it.
 Native Selection causes the document's native selection to follow NVDA's Browse Mode selection, which enables details such as formatting, links, and tables to be copied.
 Currently, Native Selection Mode is supported in:
 
 * Mozilla Firefox
 * Mozilla Thunderbird
 * Chrome, Edge, and any browser based on Chromium 134 or newer
+* Microsoft Word and Outlook, where it cannot be toggled off
+
+Native Selection Mode can also be [turned on automatically](#BrowseModeSettingsNativeSelectionMode) in supporting documents via NVDA's Browse Mode settings.
 
 <!-- KC:beginInclude -->
 
@@ -1175,7 +1247,7 @@ However, for scenarios where you wish to copy an entire table or paragraph of ri
 ## Reading Mathematical Content {#ReadingMath}
 
 NVDA can read and navigate mathematical content on the web and in other applications, providing access in both speech and braille.
-NVDA uses [MathCAT](https://nsoiffer.github.io/MathCAT/) for reading mathematical content.
+NVDA uses [MathCAT](https://daisy.github.io/MathCAT/) for reading mathematical content.
 
 ### Supported math content {#SupportedMathContent}
 
@@ -1195,9 +1267,9 @@ MathType needs to be installed in order for this to work.
 The trial version is sufficient.
 It can be downloaded from the [MathType presentation page](https://www.wiris.com/en/mathtype/).
 * Adobe Acrobat Reader:
-Tagged PDF with MathML Structure elements.
+Tagged PDF with MathML structure elements.
 * Foxit PDF Reader:
-Tagged PDF with MathML embedded as Associated files or MathML Structure Elements.
+Tagged PDF with MathML embedded as associated files or MathML structure elements.
 * Kindle Reader for PC:
 NVDA can read and navigate Math in Kindle for PC for books with accessible math.
 
@@ -1226,6 +1298,7 @@ By default, the review cursor follows the system caret, so you can usually use t
 
 At this point, NVDA will enter Math mode, where you can use commands such as the arrow keys to explore the expression.
 For example, you can move through the expression with the left and right arrow keys and zoom into a portion of the expression such as a fraction using the down arrow key.
+When [Visual Highlight](#VisionFocusHighlight) is enabled and the browse mode cursor highlighter is enabled, the current subpart of MathML on the web is also exposed visually.
 
 When you wish to return to the document, simply press the escape key.
 
@@ -1235,7 +1308,7 @@ To activate the button or the element containing the formula, press ctrl+enter.
 Below is a summary of the most useful commands for those wanting to quickly get started with navigating mathematical content.
 
 * Use the arrow keys to move left/right or up/down a mathematical structure (e.g. into/out of a fraction).
-* If inside of a table, `control+arrow` will move by cell.
+* If inside a table, `control+arrow` keys will move by cell.
 * `home` / `end` moves to the start/end of the expression.
 * `space` reads your current position.
 * `shift+upArrow` / `shift+downArrow` will change the mode of navigation, which will be discussed in more detail in the following section.
@@ -1251,11 +1324,11 @@ The format of the math copied to the clipboard can be adjusted through the [math
 
 MathCAT supports the following navigation modes:
 
-* Enhanced Mode: navigation is by mathematically meaningful pieces (operators, delimiters, and operands).
-* Simple mode: moves by words except when you get to a 2D notation (fractions, roots, ...), then it speaks the entire notation.
+* Enhanced mode: navigation is by mathematically meaningful pieces (operators, delimiters, and operands).
+* Simple mode: moves by words except when you get to a 2D notation (fractions, roots, etc), then it speaks the entire notation.
 Zooming in lets you explore the 2D notation in the same mode.
 Zooming out or moving out of the 2D notation brings you back to the outer/higher level of navigation.
-* Character Mode: this is actually two modes - word mode and character mode (zoom in to get "real" character mode).
+* Character mode: this is actually two modes - word mode and character mode (zoom in to get "real" character mode).
 Moves by words/characters.
 This differs for numbers of more than one digit and function names such as "sin" that are multiple characters.
 Otherwise, word and character navigation is the same.
@@ -1274,7 +1347,7 @@ The following are key commands used to navigate math:
 | Read next | `shift+rightArrow` |
 | Describe next | `control+shift+rightArrow` |
 | Zoom out | `upArrow` |
-| Move to cell above in a table, or digit above in columnar math. | `control+upArrow` or `control+alt+upArrow` |
+| Move to cell above in a table, or digit above in columnar math | `control+upArrow` or `control+alt+upArrow` |
 | Change Navigation Mode (Enhanced/Simple/Character) to larger | `shift+upArrow` |
 | Zoom out all the way | `control+shift+upArrow` |
 | Zoom in | `downArrow` |
@@ -1286,7 +1359,7 @@ The following are key commands used to navigate math:
 | Jump to placemarker | `1` through `0` (`0` is 10) |
 | Set placemarker | `control+1` through `control+0` |
 | Read placemarker | `shift+1` through `shift+0` |
-| Describe placemarker | `control+shift+1` through `shift+0` |
+| Describe placemarker | `control+shift+1` through `control+shift+0` |
 | Read current | `space` |
 | Read current cell | `control+space` |
 | Toggle "speech mode" to Read or Describe | `shift+space` |
@@ -1300,30 +1373,85 @@ The following are key commands used to navigate math:
 | Move back to last position | `backspace` |
 <!-- KC:endInclude -->
 
-#### Typical Use
+#### Typical Use {#MathTypicalUse}
 
 Typically, you will start at the first term of an expression and move right as needed.
 You might move up and down levels if needed.
 This is done with the arrow keys.
-`control+alt+arrow` is used to move around tabular entries.
+You can also move around tabular entries with `control+alt+arrow` keys.
 
-Backspace will take you back to where you were, which is not always the same as moving to the left.
-For example, if right arrow moved you out of a fraction, backspace will take you back to where you were in the denominator and left arrow will land on the entire fraction.
+Pressing `backspace` will take you back to where you were, which is not always the same as moving to the left.
+For example, if `rightArrow` moved you out of a fraction, `backspace` will take you back to where you were in the denominator and `leftArrow` will land on the entire fraction.
 
 You will likely find one mode of navigation the most natural for you most of the time.
-This can be set in the MathCAT settings.
-However, at any time during navigation, you can switch the navigation modes using `shift+up/down arrow`.
-This is useful because each mode of navigation has its strengths and weaknesses.
+The default mode can be set in [the math settings panel](#MathSettings).
+However, at any time during navigation, you can switch navigation modes using `shift+upArrow/downArrow` to take advantage of the differing strengths of each navigation mode.
 
 ## Braille {#Braille}
 
-If you own a braille display, NVDA can display information in braille.
+If you have access to a braille display, NVDA can display information in braille.
 If your braille display has a Perkins-style keyboard, you can also enter contracted or uncontracted braille.
 Braille can also be displayed on screen using the [Braille Viewer](#BrailleViewer) instead of, or at the same time as, using a physical braille display.
 
 Please see the [Supported Braille Displays](#SupportedBrailleDisplays) section for information about the supported braille displays.
 This section also contains information about what displays support NVDA's automatic background braille display detection functionality.
 You can configure braille using the [Braille category](#BrailleSettings) of the [NVDA Settings](#NVDASettings) dialog.
+
+### Reading Braille {#BrailleReading}
+
+When reading braille on a refreshable display, text is presented in the current [output table](#BrailleSettingsOutputTable) and [Braille Mode](#BrailleMode).
+Where text is longer than will fit on the display, panning or other keys on the device can be used to navigate without moving the focus or text caret.
+
+#### Automatic Braille Scrolling {#AutomaticBrailleScrolling}
+
+Automatic braille scrolling can be enabled to scroll the display at a set speed.
+When using this feature, the braille display scrolls to present information which is more than will fit on the display at once.
+The feature is disabled by default.
+You can change the gestures assigned to use automatic braille scrolling in NVDA's [Input Gestures dialog](#InputGestures) before it can be used.
+Gestures are also available to speed up or slow down the rate of automatic scrolling.
+Alternatively, you can [set the automatic scroll rate in Braille Settings](#BrailleAutoScrollRate).
+
+While braille is scrolling, you can still use the scroll back and scroll forward commands without stopping scrolling.
+Scroll back can be useful to read previous contents again.
+Scroll forward can be useful to skip a blank line, or if the line being read is short.
+
+While reading, automatic braille scrolling will stop when any of the following happen:
+
+* The toggle automatic braille scrolling key is pressed
+* The user presses a key or gesture which would display a new message
+* The focus is moved (including with braille display panning keys)
+* The end of the document is reached
+* The state of the lock or secure screen is changed (such as the computer being locked)
+
+#### Braille Reading Gestures {#BrailleReadingGestures}
+
+<!-- KC:beginInclude -->
+| Name | Key | Description |
+|---|---|---|
+| Toggles braille mode | `NVDA+alt+t` | Allows cycling between available braille modes: "follow cursors" and "display speech output"|
+| Tether braille | `NVDA+control+t` | This option allows you to choose whether the braille display will follow the system focus / caret, the navigator object / review cursor, or both |
+| Toggle automatic scroll | `NVDA+alt+k` | Toggles whether NVDA periodically scrolls the braille display to present information which is too long to show at once |
+| Increase automatic scroll rate | `NVDA+alt+l` | Makes automatic scrolling faster (when enabled) |
+| Decrease automatic scroll rate | `NVDA+alt+j` | Makes automatic scrolling slower (when enabled) |
+| Cycle braille cursor shapes | None | Cycle through the shape options (dot pattern) of the braille cursor |
+| Cycle move system caret when routing review cursor | None | Cycle through the braille move system caret when routing review cursor states |
+| Cycle show messages modes | None | Cycle through the braille show messages modes |
+| Cycle braille show selection states | None | Cycle through the braille show selection states |
+| Cycle braille Unicode normalization states | None | Cycle through the braille Unicode normalization states |
+| Move braille to focus | None | Moves the braille display to the current focus |
+| Move braille to next line | None | Moves the braille display to the next line |
+| Move braille to previous line | None | Moves the braille display to the previous line |
+| Report braille formatting | None | Reports formatting info for the text under this braille cell |
+| Route to or activate braille object | None | Routes the cursor to or activates the object under this braille cell |
+| Scroll braille display back | None | Scrolls the braille display back |
+| Scroll braille display forward | None | Scrolls the braille display forward |
+| Toggle braille cursor | None | Toggle the braille cursor on and off |
+| Toggle braille context information | None | Toggle the way context information is presented in braille |
+| Toggle speaking when navigating braille | None | Toggles on and off speaking when navigating by lines or paragraph with braille |
+| Toggle speaking character when routing | None | Toggles speaking the character under the cursor when routing cursor in text |
+<!-- KC:endInclude -->
+
+Refer to NVDA's [Braille Settings](#BrailleSettings) for all options which can be used to adjust braille reading.
 
 ### Control Type, State and Landmark abbreviations {#BrailleAbbreviations}
 
@@ -1464,6 +1592,19 @@ When typing in contracted Braille, using the modifier toggle keys will cause you
 In addition, the emulated keypress cannot reflect Braille typed before the modifier key was pressed.
 This means that, to type alt+2 with a Braille code that uses a number sign, you must first toggle Alt and then type a number sign.
 
+#### Braille Input Gestures {#BrailleInputGestures}
+
+<!-- KC:beginInclude -->
+
+| Name | Key | Description |
+|---|---|---|
+| Input via braille display | any dots | Inputs braille dots via the braille keyboard |
+| Erase last entered | `dot7` | Erases the last entered braille cell or character |
+| Translate braille input | `dot7+dot8` | Translates any braille input |
+| Translate and press enter | `dot8` | Translates any braille input and presses the enter key |
+
+<!-- KC:endInclude -->
+
 ## Vision {#Vision}
 
 While NVDA is primarily aimed at blind or vision impaired people who primarily use speech and/or braille to operate a computer, it also provides built-in facilities to change the contents of the screen.
@@ -1482,7 +1623,7 @@ These positions are highlighted with a coloured rectangle outline.
 * Solid blue highlights a combined navigator object and system focus location (e.g. because [the navigator object follows the system focus](#ReviewCursorFollowFocus)).
 * Dashed blue highlights just the system focus object.
 * Solid pink highlights just the navigator object.
-* Solid yellow highlights the virtual caret used in browse mode (where there is no physical caret such as in web browsers).
+* Solid yellow highlights the virtual caret used in browse mode (where there is no physical caret such as in web browsers), the cursor in OCR recognition results, and the current subpart while navigating math on the web.
 
 When Visual Highlight is enabled in the [vision category](#VisionSettings) of the [NVDA Settings](#NVDASettings) dialog, you can [change whether or not to highlight the focus, navigator object or browse mode caret](#VisionSettingsFocusHighlight).
 
@@ -1499,14 +1640,106 @@ You can enable Screen Curtain in the [Privacy and Security category](#PrivacyAnd
 | Name |Key |Description|
 |---|---|---|
 |Toggles the state of the screen curtain |`NVDA+control+escape` |Enable to make the screen black or disable to show the contents of the screen. Pressed once, screen curtain is enabled until you restart NVDA. Pressed twice, screen curtain is enabled until you disable it.|
+| Reports the state of the screen curtain | None | Announces the current status of the screen curtain, whether it is disabled or enabled or in temporary mode. |
 
 <!-- KC:endInclude -->
 
-When Screen Curtain is enabled, features that rely on what is literally on screen will not function.
-For example, you cannot [use OCR](#Win10Ocr) or [get AI image descriptions](#LocalCaptioner).
-Some screenshot utilities also may not work.
+When Screen Curtain is enabled, some features that rely on what is literally on screen will not function.
+On supported systems, [Windows OCR](#Win10Ocr) can still be used while Screen Curtain is enabled.
+Some screenshot utilities may not work.
 
 Please note that while Windows Magnifier is running and inverted screen colors are being used, Screen Curtain cannot be enabled.
+
+## Magnifier {#Magnifier}
+
+NVDA includes a built-in Magnifier feature that allows you to zoom and magnify parts of the screen.
+This feature is particularly useful for users with low vision who need to enlarge content on the screen, or for users who want to apply color filters to reduce eye strain or improve readability.
+
+The NVDA Magnifier operates as a full-screen magnifier, meaning it enlarges the entire screen while following the system focus or mouse pointer.
+It provides several configuration options to customize the magnification experience according to your needs.
+
+### Enabling and Disabling the Magnifier {#MagnifierToggle}
+
+To enable or disable the magnifier, press `NVDA+shift+w`.
+The "Increase magnification level" keystroke, `NVDA+shift+equals`, will start the magnifier if it is not running.
+When disabled, the screen returns to its normal size.
+As with other NVDA settings, the Magnifier state is preserved across sessions.
+
+### Magnifier Commands {#MagnifierCommands}
+
+Once the magnifier is enabled, you can use the following keyboard commands to control it:
+
+<!-- KC:beginInclude -->
+
+| Name | Key | Description |
+|---|---|---|
+| Toggle the magnifier on and off | `NVDA+shift+w` | Enables or disables the magnifier |
+| Increase the magnification level | `NVDA+shift+equals` | Increases the zoom level. Starts the magnifier if it's not already running. |
+| Decrease the magnification level | `NVDA+shift+minus` | Decreases the zoom level |
+| Cycle color filters | `NVDA+shift+i` | Cycles through the available color filters (normal, grayscale, inverted) |
+| Cycle tracking mode | None | Cycles through tracking modes (center, relative) |
+| Show entire screen overview | `NVDA+shift+l` | Temporarily shows an overview of the entire screen |
+| Pan left | `NVDA+alt+leftArrow` | Moves the magnified view left by the configured panning step size |
+| Pan right | `NVDA+alt+rightArrow` | Moves the magnified view right by the configured panning step size |
+| Pan up | `NVDA+alt+upArrow` | Moves the magnified view up by the configured panning step size |
+| Pan down | `NVDA+alt+downArrow` | Moves the magnified view down by the configured panning step size |
+| Pan to left edge | `NVDA+shift+alt+leftArrow` | Moves the magnified view directly to the left edge of the screen |
+| Pan to right edge | `NVDA+shift+alt+rightArrow` | Moves the magnified view directly to the right edge of the screen |
+| Pan to top edge | `NVDA+shift+alt+upArrow` | Moves the magnified view directly to the top edge of the screen |
+| Pan to bottom edge | `NVDA+shift+alt+downArrow` | Moves the magnified view directly to the bottom edge of the screen |
+| Move mouse to view | None | Move the mouse cursor to the center of the magnified view |
+
+<!-- KC:endInclude -->
+
+### Zoom Levels {#MagnifierZoomLevels}
+
+The magnifier supports zoom levels from 1.0 (no magnification) to 50.0 (maximum magnification).
+You can adjust the zoom level using the zoom in (`NVDA+shift+equals`) and zoom out (`NVDA+shift+minus`) commands.
+Each press increases or decreases the zoom by a fixed increment.
+
+### Color Filters {#MagnifierColorFilters}
+
+Color filters can help users with certain visual impairments or light sensitivity by modifying the colors displayed on the screen.
+The magnifier provides three color filter options:
+
+* Normal: No color modification is applied. This is the default setting.
+* Grayscale: Converts all colors to shades of gray, which can help reduce eye strain and improve contrast for some users.
+* Inverted: Inverts all colors on the screen (black becomes white, white becomes black, etc.), which can be helpful for users who prefer light text on dark backgrounds or have photophobia.
+
+To cycle through the available filters press `NVDA+shift+i`.
+
+### Tracking Modes {#MagnifierTrackingMode}
+
+The magnifier offers different modes for tracking the mouse, system focus, review cursor, and navigator object, and determining which part of the screen to magnify:
+
+* Center: The magnified area is centered on the currently tracked position.
+This mode keeps the tracked element at the center of the screen and clamps to the screen edge.
+* Relative: The magnified area maintains the relative position of the tracked element based on its position on the screen.
+
+To cycle through the tracking modes, please assign a custom gesture using the [Input Gestures dialog](#InputGestures).
+
+### Show entire screen overview {#MagnifierScreenOverview}
+
+The magnifier can temporarily display an overview of the entire screen, making it useful for presentations or when you need to quickly understand the overall screen layout.
+
+This is useful when you want to:
+
+* Show context to your audience during a presentation before zooming in on specific details
+* Temporarily view the full screen layout while magnifying
+
+To display an overview of the entire screen, press `NVDA+shift+l`.
+The magnifier will then:
+
+1. Smoothly zoom out to show the full screen (zoom level 1.0x)
+1. Monitor mouse movement
+1. When the mouse remains still for approximately 2 seconds, automatically zoom back in to the original zoom level at the new mouse position
+
+Moving the mouse before the zoom-back occurs gives you more time to view the full screen.
+
+### Magnifier Settings {#MagnifierSettings}
+
+The magnifier can be configured in the "Magnifier" category of the NVDA Settings dialog (`NVDA+control+w`).
+See the [Magnifier settings](#MagnifierSettingsCategory) section for details on available options.
 
 ## Content Recognition {#ContentRecognition}
 
@@ -1535,7 +1768,9 @@ Additional languages can be installed by opening the Start menu, choosing Settin
 When you want to monitor constantly changing content, such as when watching a video with subtitles, you can optionally enable automatic refresh of the recognized content.
 This can also be done in the [Windows OCR category](#Win10OcrSettings) of the [NVDA Settings](#NVDASettings) dialog.
 
-Windows OCR may be partially or fully incompatible with [NVDA vision enhancements](#Vision) or other external visual aids. You will need to disable these aids before proceeding to a recognition.
+On supported systems, Windows OCR can still be used while [Screen Curtain](#VisionScreenCurtain) or NVDA's built-in [Magnifier](#Magnifier) is active.
+External visual aids may be partially or fully incompatible with Windows OCR.
+You may need to disable these aids before proceeding to a recognition.
 
 <!-- KC:beginInclude -->
 To recognize the text in the current navigator object using Windows OCR, press NVDA+r.
@@ -1781,6 +2016,12 @@ As new text is written, the content scroll upwards and previous text is no longe
 On Windows versions before Windows 11 22H2, text in the console that is not visibly displayed in the window is not accessible with NVDA's text review commands.
 Therefore, it is necessary to scroll the console window to read earlier text.
 In newer versions of the console and in Windows Terminal, it is possible to review the entire text buffer freely without the need to scroll the window.
+
+In some cases, such as when connected over SSH, caret updates may be delayed.
+NVDA waits slightly longer for caret movement in Windows Terminal, so it is less likely to report stale characters.
+If caret reporting is still inaccurate, try increasing [Caret move timeout](#AdvancedSettingsCaretMoveTimeout) in Advanced settings.
+Increasing this value may make caret movement feel slower, so consider changing it in a configuration profile for terminal applications.
+
 <!-- KC:beginInclude -->
 The following built-in Windows Console keyboard shortcuts may be useful when [reviewing text](#ReviewingText) with NVDA in older versions of Windows Console:
 
@@ -1878,8 +2119,10 @@ This option is only available for installed copies of NVDA.
 
 ##### Use currently saved settings during sign-in and on secure screens (requires administrator privileges) {#GeneralSettingsCopySettings}
 
-Pressing this button copies your currently saved NVDA user configuration to NVDA's system configuration directory, so that NVDA will use it during sign-in and when running on User Account Control (UAC) and other [secure screens](#SecureScreens).
+Pressing this button will allow you to copy your currently saved NVDA user configuration to NVDA's system configuration directory, so that NVDA will use it during sign-in and when running on User Account Control (UAC) and other [secure screens](#SecureScreens).
 To make sure that all your settings are transferred, make sure to save your configuration first with control+NVDA+c or Save configuration in the NVDA menu.
+When this button is pressed, it first opens the [Copy Settings to System-wide Configuration](#CopyAddonsToSystemProfileDialog) dialog in which you can choose the add-ons you want to be copied to system configuration.
+
 This option is only available for installed copies of NVDA.
 
 ##### Automatically check for updates to NVDA {#GeneralSettingsCheckForUpdates}
@@ -1973,6 +2216,12 @@ This option is a slider which goes from 0 to 100 - 0 being the lowest volume and
 
 This option is a slider that lets you choose how much inflection (rise and fall in pitch) the synthesizer should use to speak with.
 
+##### Natural pause after punctuation {#SpeechSettingPunctuationSilence}
+
+Disabling this option will remove the pauses after punctuation marks.
+This option is enabled by default.
+This option only exists for Windows OneCore voices, and is supported on Windows 10 version 1803 or later.
+
 ##### Use modern audio output system (WASAPI) {#SpeechSettingsUseWasapi}
 
 This option enables audio output via the Windows Audio Session API (WASAPI).
@@ -1986,6 +2235,8 @@ Note that the following features depend on WASAPI, and will be disabled if WASAP
 * Rate boost
 * Leading silence trimming
 * Keep audio device awake
+
+Note that in Advanced settings, there is a similar [option for SAPI 4 voices](#UseWASAPIForSAPI4), not to be confused with this one.
 
 ##### Automatic Language switching {#SpeechSettingsLanguageSwitching}
 
@@ -2031,9 +2282,10 @@ If you find that NVDA is reading punctuation in the wrong language for a particu
 
 ##### Unicode normalization {#SpeechUnicodeNormalization}
 
-When this option is enabled, unicode normalization is performed on the text that is spoken by NVDA.
+When this option is enabled, Unicode normalization is performed on the text that is spoken by NVDA.
 This is beneficial when speaking characters that can be represented in several forms.
-NVDA uses the NFKC (Normalization Form Compatibility Composition) algorithm, which provides the following benefits, among others:
+NVDA uses the NFKC (Normalization Form Compatibility Composition) algorithm, with additional normalization applied.
+NFKC provides the following benefits, among others:
 
 1. The bold and italic versions of characters that are part of the Unicode standard and are commonly used on social media are normalized to their most common compatible equivalent.
 For example, the Latin letter "h" can also be presented as "𝐡" (bold), "ℎ" (italic), etc. but will always be spoken as "h" when normalization is enabled.
@@ -2047,9 +2299,14 @@ This aspect of normalization also aids in reading equations in the Microsoft Wor
 
    Unicode normalization ensures that only one form will be used throughout all speech output, which is the single-character variant.
 
-1. Decomposition of some ligatures, Including "ĳ" (ligature ij) to their two letter form ("ij").
+1. Decomposition of some ligatures, including "ĳ" (ligature ij) to their two letter form ("ij").
 
 1. Stable ordering of modifiers in composite characters, for example in ancient Hebrew.
+
+The additional normalization in NVDA handles decorative letter variants that the standard NFKC algorithm does not decompose.
+Certain Unicode characters, such as negative circled Latin capital letters (🅐–🅩) and negative squared Latin capital letters (🅲–🆉), are treated as autonomous symbols by the Unicode standard and have no compatibility decomposition.
+NVDA extends NFKC by mapping these characters to their plain Latin letter equivalents (A–Z).
+Note that a small number of negative squared letters that have emoji semantics (🅰, 🅱, 🅾, 🅿) are excluded from this mapping to preserve their distinct meaning.
 
 To toggle Unicode normalization from anywhere, please assign a custom gesture using the [Input Gestures dialog](#InputGestures).
 
@@ -2057,6 +2314,21 @@ To toggle Unicode normalization from anywhere, please assign a custom gesture us
 |---|---|
 |Options |Default (Enabled), Enabled, Disabled|
 |Default |Enabled|
+
+##### Say all reads by {#SpeechSettingsSayAllReadingUnit}
+
+This combo box lets you choose the unit of text that say all (continuous reading) advances by.
+This affects how frequently the text caret and view move during say all, and can also affect intonation in long blocks of text.
+When set to "Sentence where possible", NVDA reads sentence by sentence in controls and documents that support sentence boundaries, and automatically falls back to reading by line where sentence boundaries are not supported.
+Sentence boundaries are supported in Microsoft Word and Outlook, in several edit controls, and in most browse mode documents such as web pages.
+When set to "Paragraph", NVDA reads paragraph by paragraph.
+When set to "Line", NVDA always reads line by line.
+For example, when set to "Line", say all reads by line in Rich Edit controls such as NVDA's log viewer, whereas the default reads these by sentence.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Default (Sentence where possible), Sentence where possible, Paragraph, Line |
+| Default | Sentence where possible |
 
 ##### Report "Normalized" when navigating by character {#SpeechReportNormalizedForCharacterNavigation}
 
@@ -2398,18 +2670,41 @@ Enabling this option will cause NVDA to speak lines or paragraphs reached using 
 
 To toggle this option from anywhere, please assign a custom gesture to "speakOnNavigatingByUnit" in the "Braille" section of the [Input Gestures dialog](#InputGestures).
 
-##### Avoid splitting words when possible {#BrailleSettingsWordWrap}
+##### Automatic Scroll Rate {#BrailleAutoScrollRate}
 
-If this is enabled, a word which is too large to fit at the end of the braille display will not be split.
+This slider controls the rate at which NVDA scrolls the braille display when [automatic braille scrolling](#AutomaticBrailleScrolling) is enabled, measured in cells per second.
+
+To increase or decrease the scroll rate from anywhere, please assign custom gestures using the [Input Gestures dialog](#InputGestures).
+
+The minimum value (0%) is 1 cell per second, and the maximum value (100%) is 20 cells per second.
+For example, with the default value of 10 cells/sec, if a 40-cell braille display is used, the display will scroll automatically every 4 seconds.
+If the display had 20 cells, each line of braille would be shown for 2 seconds.
+
+While the automatic scroll option is enabled, you can still use the scroll back command to read previous contents again, and scroll forward, for example, to skip a blank line, or if the line being read is too short.
+
+Automatic scrolling will be disabled if a routing key is pressed, if a message is presented in braille, if a new object is displayed, when entering a secure screen, when the session is locked, or when the end of the window is reached.
+
+Commands can be assigned to toggle the automatic scroll option, and to increase or decrease the scroll rate, from the "Braille" section of the [Input Gestures dialog](#InputGestures).
+
+##### Text wrap {#BrailleSettingsWordWrap}
+
+This combo box allows you to configure how NVDA handles text that is too long to fit on the braille display.
+When a word is cut across rows, the continuation mark (dots 7 and 8) is shown in the last cell of the row, unless otherwise noted below.
+The following options are available:
+
+* Off: Text wraps at the display edge, cutting words mid-way if necessary, without showing any continuation mark.
+As much of the text as possible will be displayed on each row.
+When you scroll the display, you will be able to read the rest of the text.
+* Show mark when words are cut: Text is not wrapped, but whenever a word is cut at the end of the display, a continuation mark is shown.
+When you scroll the display, you will be able to read the rest of the word.
+* At word boundaries: A word which is too large to fit at the end of the braille display will not be split.
 Instead, there will be some blank space at the end of the display.
 When you scroll the display, you will be able to read the entire word.
-This is sometimes called "word wrap".
-Note that if the word is too large to fit on the display even by itself, the word must still be split.
-
-If this is disabled, as much of the word as possible will be displayed, but the rest will be cut off.
-When you scroll the display, you will then be able to read the rest of the word.
-
-Enabling this may allow for more fluent reading, but generally requires you to scroll the display more.
+Note that if the word is too large to fit on the display even by itself, the word must still be split; the continuation mark is then shown.
+This option may allow for more fluent reading, but generally requires you to scroll the display more.
+* At word or syllable boundaries: Like "At word boundaries", but long words that don't fit are split at a syllable boundary when possible, using the language of the word if known.
+For example, the word `behave` may be split between `be` and `have`.
+The continuation mark is shown whenever a word is split.
 
 ##### Unicode normalization {#BrailleUnicodeNormalization}
 
@@ -2438,6 +2733,18 @@ Disabling this option allows speech to be heard while simultaneously reading Bra
 |---|---|
 |Options |Default (Enabled), Enabled, Disabled|
 |Default |Enabled|
+
+##### Use Chinese word segmentation {#ChineseBrailleWordSegmentation}
+
+This setting controls whether NVDA uses Chinese word segmentation when translating text into braille.
+When enabled and a Chinese braille output table other than "Chinese (Taiwan, Mandarin)" is in use, NVDA inserts spaces between Chinese words before translation.
+When disabled, NVDA passes text directly to the output table without inserting spaces between words.
+This setting has no effect with the "Chinese (Taiwan, Mandarin)" table or other non-Chinese output tables.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Enabled, Disabled |
+| Default | Enabled |
 
 #### Select Braille Display {#SelectBrailleDisplay}
 
@@ -2519,6 +2826,8 @@ This option allows you to choose if NVDA should lower the volume of other applic
 
 This option is only available if NVDA has been installed.
 It is not possible to support audio ducking for portable and temporary copies of NVDA.
+
+Audio ducking is not available when using [Microsoft Speech API version 4 (SAPI 4)](#SAPI4) or 32-bit [Microsoft Speech API version 5 (SAPI 5)](#SAPI5) voices.
 
 ##### Volume of NVDA sounds follows voice volume {#SoundVolumeFollowsVoice}
 
@@ -2635,6 +2944,8 @@ The available logging levels are:
 If you are concerned about privacy, do not set the logging level to this option.
 * Debug: In addition to info, warning, and input/output messages, additional debug messages will be logged.
 Just like input/output, if you are concerned about privacy, you should not set the logging level to this option.
+* Debug (unredacted): In addition to debug logging, NVDA will not redact secrets such as passwords and API keys from logs.
+Only enable this temporarily when important debugging information is being redacted.
 
 ##### Allow NV Access to gather NVDA usage statistics {#GeneralSettingsGatherUsageStats}
 
@@ -2642,14 +2953,14 @@ If this is enabled, NV Access will use the information from update checks, inclu
 Note that although your IP address will be used to calculate your country during the update check, the IP address is never kept.
 Apart from the [mandatory information required to check for updates](#GeneralSettingsCheckForUpdates), the following extra information is also currently sent:
 
-* A unique ID for the current NVDA user, this changes once a month
+* A unique ID for the current NVDA user, which changes once a month
 * NVDA interface language
 * Whether this copy of NVDA is portable or installed
 * Name of the current speech synthesizer in use (including the name of the add-on the driver comes from)
 * Name of the current Braille display in use (including the name of the add-on the driver comes from)
 * The current output Braille table (if Braille is in use)
 
-This information greatly aides NV Access to prioritize future development of NVDA.
+This information greatly aids NV Access to prioritize future development of NVDA.
 
 #### Vision {#VisionSettings}
 
@@ -2665,7 +2976,7 @@ The check boxes in the Visual Highlight grouping control the behaviour of NVDA's
 * Enable Highlighting: Toggles Visual Highlight on and off.
 * Highlight system focus: toggles whether the [system focus](#SystemFocus) will be highlighted.
 * Highlight navigator object: toggles whether the [navigator object](#ObjectNavigation) will be highlighted.
-* Highlight browse mode cursor: Toggles whether the [virtual browse mode cursor](#BrowseMode) will be highlighted.
+* Highlight browse mode cursor: Toggles whether the [virtual browse mode cursor](#BrowseMode) will be highlighted, including the cursor in OCR recognition results and the current subpart while navigating math on the web.
 
 Note that checking and unchecking the "Enable Highlighting" check box will also change the state of the three other check boxes accordingly.
 Therefore, if "Enable Highlighting" is off and you check this check box, the other three check boxes will also be checked automatically.
@@ -2676,6 +2987,136 @@ If you only want to highlight the focus and leave the navigator object and brows
 Additional vision enhancement providers can be provided in [NVDA add-ons](#AddonsManager).
 When these providers have adjustable settings, they will be shown in this settings category in separate groupings.
 For the supported settings per provider, please refer to the documentation for that provider.
+
+#### Magnifier {#MagnifierSettingsCategory}
+
+<!-- KC:setting -->
+
+##### Open Magnifier settings {#OpenMagnifierSettings}
+
+Key: `NVDA+control+w`
+
+The Magnifier category in the NVDA Settings dialog allows you to configure the default behavior of NVDA's built-in [Magnifier](#Magnifier) feature.
+All options in this category take effect immediately, but selecting "Cancel" (or pressing `escape`) will discard any changes.
+
+This settings category contains the following options:
+
+<!-- KC:setting -->
+
+##### Enable Magnifier {#MagnifierEnable}
+
+Key: `NVDA+shift+w`
+
+This option starts or stops the Magnifier.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Disabled |
+
+##### Zoom {#MagnifierZoom}
+
+This setting allows you to set the zoom level when using the magnifier.
+The zoom level can range from 100% (no magnification) to 5000% (maximum magnification).
+The default value is 200%.
+
+You can always adjust the zoom level on the fly using the zoom in (`NVDA+shift+equals`) and zoom out (`NVDA+shift+minus`) commands while the magnifier is active.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | 100% to 5000% |
+| Default | 200% |
+
+<!-- KC:setting -->
+
+##### Color filter {#MagnifierFilter}
+
+Key: `NVDA+shift+i`
+
+This option allows you to select the filter to apply when using the magnifier.
+
+The available options are:
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Normal, Grayscale, Inverted |
+| Default | Normal |
+
+| Option | Description |
+|---|---|
+| Normal | No color modification is applied. |
+| Grayscale | Converts all colors to shades of gray, which can help reduce eye strain and improve contrast. |
+| Inverted | Inverts all colors on the screen, which can be helpful for users who prefer light text on dark backgrounds or have photophobia. |
+
+##### Panning step size {#MagnifierPanningStepSize}
+
+This option allows you to set the panning step size as a percentage of the visible magnified window.
+This means that when you use manual pan commands, the magnified view will move by the specified percentage of the current visible window size.
+Higher percentages cause larger movements, making it faster to navigate across the screen, while lower percentages provide finer control for precise positioning.
+The actual pixel distance will automatically adjust based on your current zoom level.
+
+Note: Pan commands allow you to manually move the magnified view in any direction, independent of the tracking mode.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | 1 to 100 |
+| Default | 10 |
+
+##### Follow mouse {#MagnifierFollowMouse}
+
+This checkbox controls whether the magnifier should follow the mouse pointer.
+When enabled, the magnified area will automatically move to follow the mouse pointer, which can be helpful for users who navigate primarily using the mouse rather than the keyboard.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Enabled |
+
+##### Follow system focus {#MagnifierFollowSystemFocus}
+
+This checkbox controls whether the magnifier should follow the system focus.
+When enabled, the magnified area will automatically move to follow the system focus, which can be helpful for users who navigate primarily using the keyboard and want the magnifier to track their navigation.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Enabled |
+
+##### Follow review cursor {#MagnifierFollowReviewCursor}
+
+This checkbox controls whether the magnifier should follow the review cursor.
+When enabled, the magnified area will automatically move to follow the review cursor, which can be helpful for users who use the review cursor to navigate through content and want the magnifier to track their navigation.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Enabled |
+
+##### Follow navigator object {#MagnifierFollowNavigatorObject}
+
+This checkbox controls whether the magnifier should follow the navigator object.
+When enabled, the magnified area will automatically move to follow the navigator object, which can be helpful for users who use object navigation to navigate through content and want the magnifier to track their navigation.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Enabled |
+
+##### Tracking mode {#MagnifierTrackingModeSetting}
+
+This combo box allows you to select the tracking mode when using the magnifier.
+To cycle through the tracking modes, please assign a custom gesture using the [Input Gestures dialog](#InputGestures).
+The available options are:
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Center, Relative |
+| Default | Center |
+
+| Option | Description |
+|---|---|
+| Center | The magnified area is always centered on the currently tracked position. |
+| Relative | The magnified area maintains the relative position of the tracked element based on its position on the screen. |
 
 #### Keyboard {#KeyboardSettings}
 
@@ -2730,11 +3171,15 @@ The available options are:
 
 ##### Speech interrupt for typed characters {#KeyboardSettingsSpeechInteruptForCharacters}
 
-If on, this option will cause speech to be interrupted each time a character is typed. This is on by default.
+If on, this option will cause speech to be interrupted each time a character is typed.
+This option is enabled by default.
+This option affects all NVDA speech, including in browse mode, focus mode, and say all.
 
 ##### Speech interrupt for Enter key {#KeyboardSettingsSpeechInteruptForEnter}
 
-If on, this option will cause speech to be interrupted each time the Enter key is pressed. This is on by default.
+If on, this option will cause speech to be interrupted each time the Enter key is pressed.
+This option is enabled by default.
+This option affects all NVDA speech, including in browse mode, focus mode, and say all.
 
 ##### Allow skim reading in Say All {#KeyboardSettingsSkimReading}
 
@@ -2757,7 +3202,7 @@ When enabled, NVDA will announce all non-character keys you type on the keyboard
 ##### Play sound for spelling errors while typing {#KeyboardSettingsAlertForSpellingErrors}
 
 When enabled, a short buzzer sound will be played when a word you type contains a spelling error.
-This option is only available if [reporting of spelling errors](#reportSpellingErrors) is enabled in NVDA's Document Formatting Settings.
+This option is only available if [reporting of spelling errors](#ReportSpellingErrors) is enabled in NVDA's Document Formatting Settings.
 
 ##### Handle keys from other applications {#KeyboardSettingsHandleKeys}
 
@@ -2846,6 +3291,16 @@ This setting can also be toggled using NVDA+control+alt+t.
 This checkbox allows you to specify the method you wish to use when entering text using the touch keyboard.
 If this checkbox is checked, when you locate a key on the touch keyboard, you can lift your finger and the selected key will be pressed.
 If this is unchecked, you need to double-tap on the key of the touch keyboard to press the key.
+
+##### Enable edge gestures {#TouchEdgeGestures}
+
+This checkbox enables edge gesture support.
+When enabled, gestures that begin within 15 mm of any screen edge are treated as distinct gestures and can be bound independently in the [Input Gestures dialog](#InputGestures).
+For example, a flick right that starts from the left edge of the screen can be bound to a different command from a flick right performed in the centre of the screen.
+If edge gestures are disabled after bindings have been set, those bindings will remain but will never be triggered.
+Note: Windows or the taskbar may intercept gestures on certain edges before they reach NVDA.
+For example, swiping from the bottom edge typically opens the Start menu or Action Center, and if the taskbar is positioned on another edge, touches on that edge will similarly be intercepted.
+If a gesture on a particular edge does not work, check whether Windows is intercepting it, and consider leaving that edge unbound.
 
 #### Review Cursor {#ReviewCursorSettings}
 
@@ -3079,6 +3534,38 @@ Enabled by default, this option allows you to choose if gestures (such as key pr
 As an example, if enabled and the letter j was pressed, it would be trapped from reaching the document, even though it is not a quick navigation command nor is it likely to be a command in the application itself.
 In this case NVDA will tell Windows to play a default sound whenever a key which gets trapped is pressed.
 
+##### Keep search history {#SearchHistory}
+
+Enabled by default, this option determines whether the [Find dialog](#SearchingForText) remembers the terms you have searched for during the current NVDA session.
+When enabled, the Find dialog offers up to 20 recently used search terms from a combo box; this history is kept in memory only and is cleared when NVDA restarts.
+If the combo box interferes with your input method, such as with some IMEs, you can set this option to Disabled to return the Find dialog to a plain edit field.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Default (Enabled), Disabled, Enabled |
+| Default | Enabled |
+
+##### Native selection mode {#NativeSelectionModeSetting}
+
+Disabled by default, this option determines whether [Native Selection Mode](#NativeSelectionMode) is automatically turned on in Browse Mode documents which support it.
+This setting does not affect Microsoft Word and Outlook, where Native Selection Mode is always used.
+When disabled, you can still turn on native selection mode manually per document with `NVDA+shift+f10`.
+Changing this option takes effect for newly loaded documents.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Default (Disabled), Disabled, Enabled |
+| Default | Disabled |
+
+##### Browse mode touch navigation elements {#BrowseModeSettingsBrowseModeNavigationElements}
+
+This list allows you to choose which element types are available when cycling through elements in browse touch mode.
+Use the checkboxes to enable or disable individual element types.
+Only the checked element types will appear when flicking up or down to cycle through browse mode navigation elements.
+This setting only affects touch navigation and has no effect on keyboard browse mode navigation.
+
+Available element types are those available from [single letter navigation](#SingleLetterNavigation).
+
 #### Document Formatting {#DocumentFormattingSettings}
 
 <!-- KC:setting -->
@@ -3106,11 +3593,12 @@ You can configure reporting of:
   * Comments
   * Bookmarks
   * Editor revisions
-  * Spelling errors [(Off, Speech, Sound, braille)](#reportSpellingErrors)
+  * Spelling or grammar errors [(Speech, Sound, Braille)](#ReportSpellingErrors)
 * Pages and spacing
   * Page numbers
   * Line numbers
   * Line indentation reporting [(Off, Speech, Tones, Both Speech and Tones)](#DocumentFormattingSettingsLineIndentation)
+  * Indent tone duration (ms)
   * Ignore blank lines for line indentation reporting
   * Paragraph indentation (e.g. hanging indent, first line indent)
   * Line spacing (single, double, etc.)
@@ -3157,17 +3645,17 @@ Enable this option while proof reading documents in applications such as WordPad
 
 ##### Spelling and grammar error reporting {#ReportSpellingErrors}
 
-This option allows you to configure how spelling and grammar errors are reported while reading text.
-This checklist box has three options:
+The checkboxes in this list allow you to configure how spelling and grammar errors are reported while reading text.
+You can choose any combination of the following three options:
 
-* Speech: NVDA will say "spelling error" or "grammar error" when an error is encountered while reading text
-* Sound: NVDA will play a short buzzer sound when a spelling or grammar error is encountered while reading text
+* Speech: NVDA will say "spelling error" or "grammar error" when an error is encountered while reading text.
+* Sound: NVDA will play a short buzzer sound when a spelling or grammar error is encountered while reading text.
 When navigating word by word or character by character, "out of spelling error" or "out of grammar error" is also reported if the "Speech" or "Sound" option is selected.
 * Braille: NVDA will indicate spelling or grammar errors in braille.
 To have spelling or grammar errors reported in braille, [formatting display with tags](#BrailleFormattingDisplayTags) must be enabled.
 
-Due to performance limitations, errors are not reported with speech or sounds when navigating by paragraph or by cell in tables, no matter the choice selected in this checklist box.
-In these cases, errors can be reported just in braille.
+Due to performance limitations, errors are not reported with speech or sounds when navigating by paragraph or by cell in tables, no matter the options selected.
+In these cases, errors can only be reported in braille.
 
 By default, errors will be reported with speech.
 
@@ -3189,6 +3677,12 @@ The tone will increase in pitch every space, and for a tab, it will increase in 
 
 If you tick the "Ignore blank lines for line indentation reporting" checkbox, then indentation changes won't be reported for blank lines.
 This may be useful when reading a document where blank lines are used to separate indented blocks of text, such as in programming source code.
+
+##### Indent tone duration {#IndentToneDuration}
+
+This option allows you to configure the duration of indentation tones when the "Tones" or "Both Speech and Tones" option is selected in the ["Report line indentation with"](#DocumentFormattingSettingsLineIndentation) combo box.
+The value can range from 10 ms to 2000 ms.
+The default is 40 ms.
 
 #### Document Navigation {#DocumentNavigation}
 
@@ -3214,6 +3708,24 @@ Note that this paragraph style cannot be used in Microsoft Word or Microsoft Out
 
 You may toggle through the available paragraph styles from anywhere by assigning a key in the [Input Gestures dialog](#InputGestures).
 
+##### Word Segmentation Standard {#WordSegmentationStandard}
+
+This setting controls how NVDA determines word boundaries when navigating by word.
+This affects how script languages without spaces break up text into words, sentences and paragraphs
+Chinese braille output uses a separate [Chinese word segmentation setting](#ChineseBrailleWordSegmentation), except with the "Chinese (Taiwan, Mandarin)" output table.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Default (Automatic), Automatic, Chinese, Unicode (ICU), Legacy (Uniscribe) |
+| Default | Automatic |
+
+| Option | Behaviour |
+|---|---|
+| Automatic | Use Chinese word segmentation for Chinese text when available. Otherwise, prefer Unicode (ICU) word segmentation when available, falling back to the legacy Windows word segmentation. |
+| Chinese | Use Chinese word segmentation. If Chinese word segmentation is not available, NVDA uses the fallback path as in `Automatic`. |
+| Unicode (ICU) | Use the Windows built-in ICU library for word segmentation available in Windows 10 version 1703 (Creators Update) and later, falling back to legacy. |
+| Legacy (Uniscribe) | Use the legacy Windows word segmentation as used in Notepad classic and other legacy Win32 edit controls. |
+
 #### Math Settings {#MathSettings}
 
 This category allows you to adjust how NVDA reads mathematical content.
@@ -3237,20 +3749,32 @@ If speech rules for the main language cannot be found, English ("en") is used.
 
 | . {.hideHeaderRow} | . |
 |---|---|
-| Options | Any known language code and sub-code, e.g. "en-uk". |
-| Default | en |
+| Options | Automatic, English, English (en-GB), Chinese (Traditional) (zh-TW), Finnish, German, Indonesian, Norwegian Bokmål, Spanish, Swedish, Vietnamese |
+| Default | Automatic (the language of the current voice if supported, or fallback to English) |
 
-###### Speech Style {MathSpeechStyle}
+###### Decimal separator for numbers {#MathSpeechDecimalSeparator}
 
-Different speech styles are used to change how math is reported.
+This determines the character used as the decimal separator when reading numbers in math.
+When set to Automatic, the separator is chosen based on the math language.
 
-* ClearSpeak was developed by the Educational Testing Service (ETS) for use on high-stakes tests such as national standardized testing.
-Refer to the [ClearSpeak specification details in this Word document](https://nsoiffer.github.io/MathCAT/ClearSpeakRulesAndPreferences.docx).
+| . {.hideHeaderRow} | . |
+|---|---|
+| Options | Automatic, ".", "," |
+| Default | Automatic |
+
+###### Speech Style {#MathSpeechStyle}
+
+Different styles can be used to speak mathematical content.
+Each [math speech language](#MathSpeechLanguage) has different speech styles available.
+
+For English and most languages, the following styles are available:
+
+* ClearSpeak was developed by the Educational Testing Service for use on university-admission and other high-stakes tests in the United States.
+Refer to the [ClearSpeak specification details in this Word document](https://daisy.github.io/MathCAT/ClearSpeakRulesAndPreferences.docx).
 * SimpleSpeak tries to minimize speech by speaking simple expressions such as $\frac{a}{b}$ quickly without bracketing words ("a over b").
 These are distinguished from more complex expressions such as $\frac{a}{b+1}$ which will always have bracketing words ("fraction a over b plus 1 end fraction").
 * LiteralSpeak tells MathCAT to speak math expressions almost exactly as written, without interpreting the symbols or meaning.
 It prioritizes literal reading (character-by-character or symbol-by-symbol), rather than mathematical meaning.
-* Other speech styles may exist designed for individual languages.
 
 Examples of each type of speech:
 
@@ -3261,12 +3785,12 @@ Examples of each type of speech:
 
 | . {.hideHeaderRow} | . |
 |---|---|
-| Options | ClearSpeak, SimpleSpeak, LiteralSpeak, and more options depending on your language |
-| Default | ClearSpeak |
+| Options | ClearSpeak, SimpleSpeak, LiteralSpeak, or other options depending on your language |
+| Default | Depends on the language |
 
 ###### Speech verbosity {#MathSpeechVerbosity}
 
-Controls how much "extra" speech is used.
+This option controls how much "extra" speech is used.
 For example, square roots are verbosely spoken as "the square root of x" and tersely spoken as "square root x".
 
 | . {.hideHeaderRow} | . |
@@ -3278,7 +3802,7 @@ For example, square roots are verbosely spoken as "the square root of x" and ter
 
 Changes the relative speech rate.
 The change is a percentage speed change from the standard speech engine's rate.
-`100` means the math reading rate is the same as that of the text rate.
+`100` means the reading rates of text and math content are the same, whereas `50` means that math content is read at half the speed of other content.
 
 | . {.hideHeaderRow} | . |
 |---|---|
@@ -3295,32 +3819,41 @@ Changes the relative amount of pausing that MathCAT adds.
 | Options | Number between 0 and 100 |
 | Default | 50 |
 
-###### Make a sound when starting/ending math speech {#MathSpeechSound}
+###### Beep at the beginning and end of math {#MathSpeechSound}
 
-A start and end beep occur before and after reading an expression.
+This option determines whether NVDA beeps at the beginning and end of math content.
+This option is disabled by default.
 
 | . {.hideHeaderRow} | . |
 |---|---|
-| Options | None, Beep |
-| Default | None |
+| Options | Checked, Unchecked |
+| Default | Unchecked |
 
-###### Speech for chemical formulas {#MathSpeechForChemical}
+###### Chemical formulae {#MathSpeechForChemical}
 
-Controls how chemical formulae are read.
+This option controls how chemical formulae are read.
 Examples for $\mathrm{H}_2\mathrm{O}$:
 
-* SpellOut: "H 2 O" (verbosity controls whether "sub"/"super" is spoken)
-* AsCompound: "Water"
+* Spell it out: "H 2 O" ([verbosity](#MathSpeechVerbosity) controls whether "sub"/"super" is spoken)
 * Off: "H sub 2 O"
 
 | . {.hideHeaderRow} | . |
 |---|---|
-| Options | Spell Out, As Compound, Off |
-| Default | SpellOut |
+| Options | Spell it out, Off |
+| Default | Spell it out |
+
+###### When entering an equation {#MathNavSpeech}
+
+Whether to speak the expression after moving to it or give an overview.
+
+| . {.hideHeaderRow} | . |
+|---|---|
+| Options | Speak, Describe overview |
+| Default | Speak |
 
 ##### Navigation Options {#MathNavigation}
 
-###### Navigation mode to use when beginning to navigate an equation {#MathNavMode}
+###### Default navigation mode {#MathNavMode}
 
 "Enhanced" mode understands math structure.
 "Simple" mode walks by character to find things like fractions, roots, and scripts.
@@ -3331,36 +3864,30 @@ Examples for $\mathrm{H}_2\mathrm{O}$:
 | Options | Enhanced, Character, Simple |
 | Default | Enhanced |
 
-###### Navigation speech to use when beginning to navigate an equation {#MathNavSpeech}
+###### Reset to the default navigation mode for each new equation {#MathNavReset}
 
-Whether to speak the expression after moving to it or give an overview.
-
-| . {.hideHeaderRow} | . |
-|---|---|
-| Options | Speak, Overview |
-| Default | Speak |
-
-###### Make a sound when starting/ending math speech {#MathNavReset}
-
-Whether to play a beep sound when speech starts/ends.
+This option selects whether NVDA resets to the default navigation mode when entering a new equation.
+When this option is disabled, NVDA preserves the last selected navigation mode across equations in the same NVDA session.
+This option is enabled by default.
 
 | . {.hideHeaderRow} | . |
 |---|---|
 | Options | Checked, Unchecked |
 | Default | Checked |
 
-###### Automatic zoom out of 2D notations {#MathNavAutoZoom}
+###### Automatically zoom out of two-dimensional notation {#MathNavAutoZoom}
 
-Auto zoom out of 2D expressions like fractions (use `shift+arrow` to force zoom out if this is unchecked).
+Auto zoom out of 2D expressions like fractions (use `upArrow` to manually zoom out if this is unchecked).
+This option is enabled by default.
 
 | . {.hideHeaderRow} | . |
 |---|---|
 | Options | Checked, Unchecked |
 | Default | Checked |
 
-###### Speech amount for navigation {#MathNavSpeechAmount}
+###### Navigation verbosity {#MathNavSpeechAmount}
 
-Specify whether you want a terse or verbose reading of navigation commands.
+This option specifies whether NVDA should read mathematical expressions in a terse or verbose manner during navigation.
 
 | . {.hideHeaderRow} | . |
 |---|---|
@@ -3369,16 +3896,16 @@ Specify whether you want a terse or verbose reading of navigation commands.
 
 ###### Copy math as {#MathNavCopyAs}
 
-Specify how math will be copied to the clipboard.
+This option selects the format of math content copied to the clipboard.
 
 | . {.hideHeaderRow} | . |
 |---|---|
-| Options | MathML, LaTeX, ASCIIMath |
+| Options | MathML, LaTeX, ASCIIMath, Speech |
 | Default | MathML |
 
 ##### Braille Options {#MathBrailleOptions}
 
-###### Braille math code for refreshable displays {#MathBrailleCode}
+###### Output code {#MathBrailleCode}
 
 The braille math code to use.
 When this option is set to "Automatic", NVDA selects a default math braille code based on the current NVDA language.
@@ -3388,15 +3915,30 @@ When this option is set to "Automatic", NVDA selects a default math braille code
 | Options | Automatic, ASCIIMath, ASCIIMath-Finnish, CMU, LaTeX, Nemeth, Swedish, UEB, Vietnam |
 | Default | Automatic |
 
-###### Highlight the current navigation node with dots 7 and 8 {#MathBrailleHighlights}
+###### Highlight navigation focus with dots 7 and 8 {#MathBrailleHighlights}
 
-Highlight the currently selected navigation node with dots 7 and 8.
+This option determines whether NVDA indicates the currently selected subexpression with dots 7 and 8 during navigation.
 The options allow for either no highlighting, only highlighting of the first character, highlighting of the first and last character, or highlighting of the entire subexpression.
 
 | . {.hideHeaderRow} | . |
 |---|---|
 | Options | Off, First Character, Endpoints, All |
 | Default | Endpoints |
+
+##### Application support {#MathApplicationSupport}
+
+###### Use native math support in Word and Outlook {#MathUseWordNative}
+
+This option disables MathCAT when reading and interacting with equations in Microsoft Word or Outlook.
+This allows you to use the math presentation (speech, braille, and interaction) that is built-in to these programs.
+
+You cannot use MathCAT in Microsoft Word or Outlook when this option is enabled.
+This option does not affect MathCAT support in other programs.
+
+| . {.hideHeaderRow} | . |
+|---|---|
+| Options | Checked, Unchecked |
+| Default | Unchecked |
 
 #### Add-on Store Settings {#AddonStoreSettings}
 
@@ -3553,15 +4095,6 @@ You will be asked to confirm before all trusted fingerprints are deleted.
 
 This option is only available if there are trusted fingerprints stored in your configuration.
 
-#### AI Image Descriptions Settings {#LocalCaptionerSettings}
-
-This panel provides options to customize the behavior and default settings for the ["Image Captioner"](#LocalCaptioner).
-
-##### Enable image captioner {#LocalCaptionToggle}
-
-When this checkbox is enabled, NVDA will load the image captioner in memory, enabling the use of the image description command.
-Loading the image captioner will increase memory usage, so this is disabled by default.
-
 #### Windows OCR Settings {#Win10OcrSettings}
 
 The settings in this category allow you to configure [Windows OCR](#Win10Ocr).
@@ -3605,6 +4138,38 @@ Leave this blank to use the default NV Access server.
 Press this button to test the mirror URL you have entered.
 You must be connected to the internet for the test to succeed.
 It is recommended that you always test the URL before saving it.
+
+#### Copy Settings to System-wide Configuration Dialog {#CopyAddonsToSystemProfileDialog}
+
+This dialog appears if you choose to [copy your settings to NVDA's system-wide configuration](#GeneralSettingsCopySettings) and your NVDA configuration or the system-wide NVDA configuration contains [add-ons](#AddonsManager).
+It allows you to choose which of your add-ons to copy to the system-wide configuration, which is used during sign-in and on [secure screens](#SecureScreens).
+It also shows which add-ons are already present in the system-wide configuration.
+By default, only add-ons that are already present in the system-wide configuration will be included.
+
+Copying add-ons to the system-wide configuration is a serious security risk.
+NVDA uses this configuration when running on secure screens, including the sign-in and User Account Control (UAC) screens.
+When running on secure screens, NVDA runs as the system user, which has privileges even greater than administrators.
+This means that many of the usual security and privacy features of Windows, like User Account Control (UAC), do not apply.
+Allowing add-ons to run in this environment grants them unrestricted access to your entire system.
+
+The list of add-ons shows all add-ons enabled in the currently running NVDA configuration and/or present in the system-wide NVDA configuration.
+The version of the add-on installed in the currently running configuration is shown in the "User version" column.
+The version installed in the system-wide configuration is shown in the "System-wide version" column.
+If the add-on is not present in the currently running or system-wide configuration, "Not installed" is shown in the appropriate column.
+
+To copy one or more add-ons to the system-wide configuration, check them in the list of add-ons.
+You are strongly recommended to leave all add-ons that you do not require to access secure screens unchecked.
+
+To get more information about an add-on, select the add-on in the list of add-ons and press the "About add-on..." button.
+The details shown are for the version in the currently running configuration.
+If the add-on is not installed in the currently running configuration, the details of the version in the system-wide configuration are shown instead.
+
+Please note that you may only copy currently enabled add-ons to the system-wide configuration.
+Add-ons that are "pending restart" cannot be copied.
+
+Add-ons that are currently installed in the system-wide configuration, but are not present in the running NVDA configuration will be removed.
+These items cannot be checked.
+They also begin with "[remove]" for easy identification.
 
 #### Advanced Settings {#AdvancedSettings}
 
@@ -3758,6 +4323,16 @@ This feature is available and enabled by default on Windows 10 versions 1607 and
 Warning: with this option enabled, typed characters that do not appear onscreen, such as passwords, will not be suppressed.
 In untrusted environments, you may temporarily disable [speak typed characters](#KeyboardSettingsSpeakTypedCharacters) and [speak typed words](#KeyboardSettingsSpeakTypedWords) when entering passwords.
 
+##### Beep for skipped lines {#BeepForSkippedLines}
+
+This setting controls whether NVDA plays a short beep when too many new lines arrive before they can all be reported.
+The beep indicates that some lines were skipped, and becomes slightly longer as more lines are skipped.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Disabled, Enabled |
+| Default | Enabled |
+
 ##### Diff algorithm {#DiffAlgo}
 
 This setting controls how NVDA determines the new text to speak in terminals.
@@ -3803,6 +4378,30 @@ When enabled, NVDA will remove silence from the start of speech audio, which may
 This option is enabled by default, and should only affect the silence at the beginning of speech.
 If you find that some necessary silence periods are also missing (e.g. pause between two sentences) when using a speech synthesizer add-on, you may turn this feature off entirely to resolve the issue.
 
+##### Use WASAPI for SAPI 4 audio output {#UseWASAPIForSAPI4}
+
+This option enables Microsoft Speech API version 4 (SAPI 4) voices to output audio via the Windows Audio Session API (WASAPI).
+This can allow SAPI 4 voices to work with more features, such as leading silence trimming and keeping audio device awake.
+However, some SAPI 4 voices might not work with the current WASAPI implementation.
+If you find that the SAPI 4 voice you are using stops working, you may disable this option.
+
+Note that in Speech settings, there is a similar [option for SAPI 5 voices](#SpeechSettingsUseWasapi), not to be confused with this one.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+|Options |Default (Enabled), Disabled, Enabled|
+|Default |Enabled|
+
+##### Use modern regular expression engine for speech dictionary entries {#SpeechDictsUseModernRegex}
+
+This setting controls how Regular expression entries in [speech dictionaries](#SpeechDictionaries) are matched.
+The [modern engine](https://pypi.org/project/regex/) has better support for non-Latin scripts, such as Hebrew and Arabic, and offers more powerful matching options.
+
+| . {.hideHeaderRow} |.|
+|---|---|
+| Options | Default (Disabled), Disabled, Enabled |
+| Default | Disabled |
+
 ##### Caret move timeout (in MS) {#AdvancedSettingsCaretMoveTimeout}
 
 This option allows you to configure the number of milliseconds NVDA will wait for the caret (insertion point) to move in editable text controls.
@@ -3824,8 +4423,9 @@ Only turn one of these on if specifically instructed to by an NVDA developer e.g
 ##### Play a sound for logged errors {#PlayErrorSound}
 
 This option allows you to specify if NVDA will play an error sound in case an error is logged.
-Choosing Only in test versions (default) makes NVDA play error sounds only if the current NVDA version is a test version (alpha, beta or run from source).
-Choosing Yes allows to enable error sounds whatever your current NVDA version is.
+Choosing "Only in test versions (default)" makes NVDA play error sounds only if the current NVDA version is a test version (alpha, beta or run from source).
+Choosing "Yes" allows to enable error sounds whatever your current NVDA version is.
+Choosing "No" disables error sounds no matter what your current NVDA version is, i.e. even in test versions.
 
 ##### Regular expression for text paragraph quick navigation commands {#TextParagraphRegexEdit}
 
@@ -3853,6 +4453,9 @@ The dialog also contains Add, Edit, Remove and Remove all buttons.
 
 To add a new rule to the dictionary, press the Add button, and fill in the fields in the dialog box that appears and then press Ok.
 You will then see your new rule in the list of rules.
+
+You can use a context menu to edit or remove rules.
+You can also use the `delete` key to remove a selected rule.
 However, to make sure your rule is actually saved, make sure to press Ok to exit the dictionary dialog completely once you have finished adding/editing rules.
 
 The rules for NVDA's speech dictionaries allow you to change one string of characters into another.
@@ -3864,14 +4467,32 @@ NVDA's speech dictionaries however are much more powerful than simple word repla
 The Add rule dialog also contains a checkbox to say whether or not you want the rule to be case sensitive (meaning that NVDA should care whether the characters are uppercase or lowercase.
 NVDA ignores case by default).
 
-Finally, a set of radio buttons allows you to tell NVDA whether your pattern should match anywhere, should only match if it is a complete word or should be treated as a "Regular expression".
-Setting the pattern to match as a whole word means that the replacement will only be made if the pattern does not occur as part of a larger word.
-This condition is met if the characters immediately before and after the word are anything other than a letter, a number, or an underscore, or if there are no characters at all.
-Thus, using the earlier example of replacing the word "bird" with "frog", if you were to make this a whole word replacement, it would not match "birds" or "bluebird".
+A set of radio buttons allows you to tell NVDA how your pattern should be matched.
+The available types are:
 
-A regular expression is a pattern containing special symbols that allow you to match on more than one character at a time, or match on just numbers, or just letters, as a few examples.
+* Anywhere: The pattern can match anywhere in the text.
+* Whole word: The replacement will only be made if the pattern occurs as a complete word.
+This means the pattern does not occur as part of a larger word.
+The condition is met if the characters immediately before and after the word are anything other than a letter, a number, or an underscore, or if there are no characters at all.
+For example, if you replace "bird" with "frog" using whole word matching, it would not match "birds" or "bluebird".
+* Part of word: The pattern must be preceded or followed by an alphanumeric character or underscore to match.
+This is useful for matching parts of compound words.
+For example, if you replace "bird" with "frog" using part of word matching, it would match "birds", "bluebird", "bluebirds" and "birdsong", but not the standalone word "bird" (because it has neither a preceding nor a following alphanumeric character).
+* Start of word: The pattern must have a word boundary at the start and an alphanumeric character or underscore at the end.
+For example, if you replace "bird" with "frog" using start of word matching, it would match "birds" and "birdsong", but not "bluebird" or the standalone word "bird".
+* End of word: The pattern must have an alphanumeric character or underscore at the start and a word boundary at the end.
+For example, if you replace "bird" with "frog" using end of word matching, it would match "bluebird" and "songbird", but not "birds" or the standalone word "bird".
+* Regular expression: The pattern is treated as a regular expression, which is a pattern containing special symbols that allow you to match on more than one character at a time, or match on just numbers, or just letters, as a few examples.
 Regular expressions are not covered in this user guide.
 For an introductory tutorial, please refer to [Python's Regular Expression Guide](https://docs.python.org/3.13/howto/regex.html).
+Also consider [the advanced setting to enable a more modern engine](#SpeechDictsUseModernRegex), especially when dealing with non-Latin scripts, such as Hebrew and Arabic.
+* Unix shell-style wildcards: The pattern uses Unix shell-style wildcards for matching.
+For example:
+  * `*` matches any sequence of characters.
+  * `?` matches a single character.
+  * `[az]` matches a or z.
+  * `[a-z]` matches any lowercase letter from a through z.
+  * `[!a-z]` matches any character except lowercase letters a through z.
 
 #### Punctuation/symbol pronunciation {#SymbolPronunciation}
 
@@ -3925,7 +4546,10 @@ Often, a gesture can be interpreted in more than one way.
 For example, if you pressed a key on the keyboard, you may wish it to be specific to the current keyboard layout (e.g. desktop or laptop) or you may wish it to apply for all layouts.
 In this case, a menu will appear allowing you to select the desired option.
 
-To remove a gesture from a command, select the gesture and press the Remove button.
+You can also use the context menu to add, change, or remove gestures for each command.
+To change an input gesture of a command, select the gesture and press the change button.
+Then, perform the new input gesture you wish to associate; that will replace the old one.
+To remove a gesture from a command, you can press the `delete` key or the remove button.
 
 The Emulated system keyboard keys category contains NVDA commands that emulate keys on the system keyboard.
 These emulated system keyboard keys can be used to control a system keyboard right from your braille display.
@@ -3949,14 +4573,15 @@ To save the settings manually at any time, choose the Save configuration item in
 
 If you ever make a mistake with your settings and need to revert back to the saved settings, choose the "revert to saved configuration" item in the NVDA menu.
 You can also reset your settings to their original factory defaults by choosing Reset Configuration To Factory Defaults, which is also found in the NVDA menu.
+After resetting, a dialog will appear allowing you to undo the reset and restore your previous configuration.
 
 The following NVDA key commands are also useful:
 <!-- KC:beginInclude -->
 
-| Name |Desktop key |Laptop key |Description|
-|---|---|---|---|
-|Save configuration |`NVDA+control+c` |`NVDA+control+c` |Saves your current configuration so that it is not lost when you exit NVDA|
-|Revert configuration |`NVDA+control+r` |`NVDA+control+r` |Pressing once resets your configuration to when you last saved it. Pressing three times will reset it back to factory defaults.|
+| Name | Key | Description |
+|---|---|---|
+| Save configuration | `NVDA+control+c` | Saves your current configuration so that it is not lost when you exit NVDA |
+| Revert configuration | `NVDA+control+r` | Pressing once resets your configuration to when you last saved it. Pressing three times will reset it back to factory defaults without showing the undo dialog. |
 
 <!-- KC:endInclude -->
 
@@ -3987,6 +4612,9 @@ When you open the dialog, the profile you are currently editing is selected.
 Additional information is also shown for active profiles, indicating whether they are manually activated, triggered and/or being edited.
 
 To rename or delete a profile, press the Rename or Delete buttons, respectively.
+
+You can also manage profiles by opening the context menu on a profile in the list to rename or delete it.
+Additionally, you can press `f2` to rename the selected profile or `delete` to remove it.
 
 Press the Close button to close the dialog.
 
@@ -4183,36 +4811,6 @@ Once a Remote Access session is active, you can switch between controlling the r
 | Send `control+alt+delete` | None | Sends `control+alt+delete` to the controlled computer. |
 <!-- KC:endInclude -->
 
-## Image Captioner {#LocalCaptioner}
-
-NVDA supports generating image descriptions on your device without connecting to the internet.
-This feature allows NVDA to describe images encountered during navigation.
-
-Warning: AI image descriptions are an experimental feature.
-Image descriptions generated with this feature may not be accurate.
-You must not use this feature in circumstances where inaccurate results could reasonably be expected to cause harm.
-Always exercise caution and skepticism when interpreting AI image descriptions.
-
-Note: An internet connection is required to enable and install the Image Captioner for the first time.
-It is not included with the NVDA installer to reduce the installer size.
-
-### Getting Started {#LocalCaptionerGettingStarted}
-
-Enable the "Image Captioner" in the ["AI Image Descriptions" settings panel](#LocalCaptionToggle).
-Once the Image Captioner is ready, press the default shortcut `NVDA+g` to recognize the image currently navigated by NVDA.
-
-### AI Image Descriptions Key Commands Summary {#LocalCaptionerGestures}
-
-<!-- KC:beginInclude -->
-
-| Name |Key |Description|
-|---|---|---|
-| Get an AI-generated image description of the navigator object. | `NVDA+g` | Get a description of the navigator object provided by a recognition performed on the device locally. |
-| Load or unload the image captioner | None | Load or unload the image captioner in memory, enabling the use of the image description command. |
-| Shows the AI image descriptions settings | None | Opens the AI image descriptions settings panel. |
-
-<!-- KC:endInclude -->
-
 ## Add-ons and the Add-on Store {#AddonsManager}
 
 Add-ons are software packages which provide new or altered functionality for NVDA.
@@ -4394,7 +4992,8 @@ From an add-on's actions menu, using the submenu "Update channel", you can modif
 #### What's new in the current version {#AddonStoreChangelog}
 
 If an add-on lists what's new for the current version, an action will be available to show these changes in browse mode.
-The title of that message will indicate the add-on version, and it will be possible to copy the presented info, and close the message window, via dedicated buttons.
+The add-on version is included in the title of the message.
+Buttons are provided to copy the presented information or close the message window.
 
 ### Incompatible Add-ons {#incompatibleAddonsManager}
 
@@ -4494,11 +5093,11 @@ This will open a dialog which allows you to create a portable copy of NVDA out o
 
 Follow the directions in [Creating a portable copy](#CreatingAPortableCopy) for more information.
 
-### Run COM registration fixing tool... {#RunCOMRegistrationFixingTool}
+### Run System Accessibility Repair Tool... {#RunCOMRegistrationFixingTool}
 
 Sometimes, problems can develop with the Windows Registry, that result in NVDA behaving abnormally.
 This can be caused by, for example, installing or uninstalling certain programs (such as Adobe Reader or Math Player), as well as Windows updates and other events.
-The COM Registration Fixing Tool attempts to fix these issues by repairing accessibility entries in the registry.
+The System Accessibility Repair Tool attempts to fix these issues by repairing accessibility entries in the registry.
 
 The types of problem this tool can fix include:
 
@@ -4541,11 +5140,23 @@ There are over 43 different languages supported by eSpeak NG.
 
 There are also many variants which can be chosen to alter the sound of the voice.
 
+### Microsoft Speech API version 4 (SAPI 4) {#SAPI4}
+
+SAPI 4 is an older Microsoft standard for software speech synthesizers.
+NVDA still supports this for users who already have SAPI 4 synthesizers installed.
+However, Microsoft no longer support this and needed components are no longer available from Microsoft.
+
+When using this synthesizer with NVDA, the available voices (accessed from the [Speech category](#SpeechSettings) of the [NVDA Settings](#NVDASettings) dialog or by the [Synth Settings Ring](#SynthSettingsRing)) will contain all the voices from all the installed SAPI 4 engines found on your system.
+
 ### Microsoft Speech API version 5 (SAPI 5) {#SAPI5}
 
 SAPI 5 is a Microsoft standard for software speech synthesizers.
+NVDA supports both 32-bit and 64-bit SAPI 5 voices.
+For the best performance and feature compatibility, 64-bit voices should be preferred.
 Many speech synthesizers that comply with this standard may be purchased or downloaded for free from various companies and websites, though your system will probably already come with at least one SAPI 5 voice preinstalled.
-When using this synthesizer with NVDA, the available voices (accessed from the [Speech category](#SpeechSettings) of the [NVDA Settings](#NVDASettings) dialog or by the [Synth Settings Ring](#SynthSettingsRing)) will contain all the voices from all the installed SAPI 5 engines found on your system.
+
+When using the 32-bit or 64-bit SAPI 5 synthesizer with NVDA, the available voices (accessed from the [Speech category](#SpeechSettings) of the [NVDA Settings](#NVDASettings) dialog or by the [Synth Settings Ring](#SynthSettingsRing)) will contain all the voices from all the installed 32-bit or 64-bit SAPI 5 engines found on your system, respectively.
+If you are unable to find a SAPI 5 voice that is installed on your system, try switching to the other SAPI 5 synthesizer using the [Select Synthesizer dialog](#SelectSynthesizer).
 
 ### Microsoft Speech Platform {#MicrosoftSpeechPlatform}
 
@@ -4589,7 +5200,7 @@ This option is selected by default.
 
 The following displays support this automatic detection functionality.
 
-* Handy Tech displays
+* Help Tech displays (formerly Handy Tech)
 * Baum/Humanware/APH/Orbit braille displays
 * HumanWare Brailliant BI/B series
 * HumanWare BrailleNote
@@ -4633,6 +5244,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Move back using right wiz wheel action |rightWizWheelUp|
 |Move forward using right wiz wheel action |rightWizWheelDown|
 |Route to braille cell |routing|
+| Select range from first up to last braille cell | `multiRouting` |
 |shift+tab key |brailleSpaceBar+dot1+dot2|
 |tab key |brailleSpaceBar+dot4+dot5|
 |upArrow key |brailleSpaceBar+dot1|
@@ -4709,6 +5321,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Move braille display to next line |t4|
 |Scroll braille display forward |t5, etouch3|
 |Route to braille cell |routing|
+| Select range from first up to last braille cell | `multiRouting` |
 |Report text formatting under braille cell |secondary routing|
 |Toggle HID keyboard simulation |t1+spEnter|
 |Move to top line in review |t1+t2|
@@ -4739,18 +5352,18 @@ Please see the display's documentation for descriptions of where these keys can 
 
 <!-- KC:endInclude -->
 
-### Handy Tech Displays {#HandyTech}
+### Help Tech Displays {#HandyTech}
 
-NVDA supports most displays from [Handy Tech](https://www.handytech.de/) when connected via USB, serial port or bluetooth.
-For older USB displays, you will need to install the USB drivers from Handy Tech on your system.
+NVDA supports most displays from [Help Tech](https://www.helptech.de/) (formerly Handy Tech) when connected via USB, serial port or Bluetooth.
 
-The following displays are not supported out of the box, but can be used via [Handy Tech's universal driver](https://handytech.de/en/service/downloads-and-manuals/handy-tech-software/braille-display-drivers) and NVDA add-on:
+The following displays are no longer supported:
 
 * Braillino
 * Bookworm
-* Modular displays with firmware version 1.13 or lower. Please note that the firmware of this displays can be updated.
+* Modular displays with firmware version 1.13 or lower.
+Please note that the firmware of these displays can be updated.
 
-Following are the key assignments for Handy Tech displays with NVDA.
+Following are the key assignments for Help Tech displays with NVDA.
 Please see the display's documentation for descriptions of where these keys can be found.
 <!-- KC:beginInclude -->
 
@@ -4761,6 +5374,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Move braille display to previous line |b4|
 |Move braille display to next line |b5|
 |Route to braille cell |routing|
+| Select range from first up to last braille cell | `multiRouting` |
 |shift+tab key |esc, left triple action key up+down|
 |alt key |b2+b4+b5|
 |escape key |b4+b6|
@@ -4812,16 +5426,13 @@ These include:
 * Baum: SuperVario, PocketVario, VarioUltra, Pronto!, SuperVario2, Vario 340
 * HumanWare: Brailliant, BrailleConnect, Brailliant2
 * APH: Refreshabraille
-* Orbit: Orbit Reader 20
+* Orbit: Orbit Reader 20, Orbit Reader 40
 
 Some other displays manufactured by Baum may also work, though this has not been tested.
 
 If connecting via USB to displays which do not use HID, you must first install the USB drivers provided by the manufacturer.
 The VarioUltra and Pronto! use HID.
-The Refreshabraille and Orbit Reader 20 can use HID if configured appropriately.
-
-The USB serial mode of the Orbit Reader 20 is currently only supported in Windows 10 and later.
-USB HID should generally be used instead.
+The Refreshabraille, Orbit Reader 20, and Orbit Reader 40 can use HID if configured appropriately.
 
 Following are the key assignments for these displays with NVDA.
 Please see your display's documentation for descriptions of where these keys can be found.
@@ -4834,6 +5445,7 @@ Please see your display's documentation for descriptions of where these keys can
 |Move braille display to previous line |`d1`|
 |Move braille display to next line |`d3`|
 |Route to braille cell |`routing`|
+| Select range from first up to last braille cell | `multiRouting` |
 |`shift+tab` key |`space+dot1+dot3`|
 |`tab` key |`space+dot4+dot6`|
 |`alt` key |`space+dot1+dot3+dot4` (`space+m`)|
@@ -4929,6 +5541,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Move braille display to previous line |up|
 |Move braille display to next line |down|
 |Route to braille cell |routing|
+| Select range from first up to last braille cell | `multiRouting` |
 |Toggle braille tethered to |up+down|
 |upArrow key |space+dot1|
 |downArrow key |space+dot4|
@@ -4947,12 +5560,16 @@ Please see the display's documentation for descriptions of where these keys can 
 
 <!-- KC:endInclude -->
 
-#### Key assignments for Brailliant BI 32, BI 40 and B 80 {#HumanWareBrailliantKeyAssignmentForBI32BI40AndB80}
+#### Key assignments for Brailliant BI 32, BI 40, B 80, BI 20X and BI 40X {#HumanWareBrailliantKeyAssignmentForBI32BI40AndB80}
 
 <!-- KC:beginInclude -->
 
 | Name |Key|
 |---|---|
+| Move braille display to previous line | `c1` |
+| Scroll braille display back | `c2` |
+| Move braille display to next line | `c3` |
+| Scroll braille display forward | `c5` |
 |NVDA Menu |c1+c3+c4+c5 (command n)|
 |windows+d key (minimize all applications) |c1+c4+c5 (command d)|
 |Say all |c1+c2+c3+c4+c5+c6|
@@ -4977,6 +5594,7 @@ Please see the display's documentation for descriptions of where these keys can 
 
 NVDA supports Braille Sense, Braille EDGE, Smart Beetle and Sync Braille displays from [Hims](https://www.hims-inc.com/) when connected via USB or bluetooth.
 If connecting via USB, you will need to install the [USB drivers from HIMS](http://www.himsintl.com/upload/HIMS_USB_Driver_v25.zip) on your system.
+On Windows 11 systems where this driver cannot be installed, Braille Sense and Braille EDGE displays connected via USB can still be detected if you instead install the [HIMS WinUSB driver package](https://hims-product.s3.ap-northeast-2.amazonaws.com/Util/HIMS_Braille_Driver_V3_1.exe).
 
 Following are the key assignments for these displays with NVDA.
 Please see the display's documentation for descriptions of where these keys can be found.
@@ -5110,6 +5728,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |leftArrow key |RJ left|
 |rightArrow key |RJ right|
 |Route to braille cell |routing|
+| Select range from first up to last braille cell | `multiRouting` |
 |shift+upArrow key |Space+RJ up, Backspace+RJ up|
 |shift+downArrow key |Space+RJ down, Backspace+RJ down|
 |shift+leftArrow key |Space+RJ left, Backspace+RJ left|
@@ -5737,6 +6356,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Scroll braille display back |`left`, `lWheelLeft`, `rWheelLeft`|
 |Scroll braille display forward |`right`, `lWheelRight`, `rWheelRight`|
 |Route to braille cell |`routing`|
+| Select range from first up to last braille cell | `home1+multiRouting`, `home2+multiRouting` |
 |Report text formatting under braille cell |`secondary routing`|
 |Toggle the way context information is presented in braille |`attribute1+attribute3`|
 |Cycles between speech modes |`attribute2+attribute4`|
@@ -5794,6 +6414,7 @@ Please see the display's documentation for descriptions of where these keys can 
 |Move braille display to previous line |`d1`|
 |Move braille display to next line |`d3`|
 |Route to braille cell |`routing`|
+| Select range from first up to last braille cell | `multiRouting` |
 |Up arrow key |`up`|
 |Down arrow key |`down`|
 |Left arrow key |`left`|
@@ -5817,6 +6438,7 @@ Following are the current key assignments for these displays.
 |Scroll braille display back |pan left or rocker up|
 |Scroll braille display forward |pan right or rocker down|
 |Route to braille cell |routing set 1|
+| Select range from first up to last braille cell | multiple routing set 1 keys |
 |Toggle braille tethered to |up+down|
 |upArrow key |joystick up, dpad up or space+dot1|
 |downArrow key |joystick down, dpad down or space+dot4|
@@ -5843,7 +6465,9 @@ The A300 model has a tactile graphics area of 120 by 80 dots, which can fit 8 li
 
 You can configure whether NVDA displays braille on the dedicated braille display line or on the tactile graphics area via the Braille Destination option in NVDA's Braille settings for this driver.
 
-Panning keys are supported, but due to limited buttons on the device, other commands and routing capabilities are currently not available.
+The Dot Pad has left and right panning keys and four function keys (f1 through f4).
+Multiple buttons can be pressed simultaneously to create combination gestures (e.g., `f1+panLeft`), which can be assigned via the Input Gestures dialog.
+Apart from panning, no other commands are assigned by default.
 
 The Dot Pad driver supports automatic detection of USB-connected devices.
 However, automatic detection is disabled by default due to the device using generic USB identifiers that could conflict with other devices.
@@ -5856,10 +6480,10 @@ Make sure to lift your hand entirely off the device when navigating with NVDA, a
 
 <!-- KC:beginInclude -->
 
-| Name |Key|
+| Name | Key |
 |---|---|
-|Scroll braille display back | `pan_left` |
-|Scroll braille display forward | `pan_right` |
+| Scroll braille display back | `panLeft` |
+| Scroll braille display forward | `panRight` |
 
 <!-- KC:endInclude -->
 
@@ -5906,14 +6530,28 @@ Secure mode freezes changes to NVDA configuration, so please ensure that NVDA is
 
 NVDA runs in [secure mode](#SecureMode) when executed on secure screens unless the `serviceDebug` [system wide parameter](#SystemWideParameters) is enabled.
 
-When running from a secure screen, NVDA uses a system profile for preferences.
-NVDA user preferences can be copied [for use in secure screens](#GeneralSettingsCopySettings).
+When running on a secure screen, NVDA uses its system-wide configuration for preferences.
+NVDA user preferences can be copied [for use on secure screens](#GeneralSettingsCopySettings).
 
 Secure screens include:
 
 * The Windows sign-in screen
 * The User Access Control dialog, active when performing an action as an administrator
   * This includes installing programs
+
+### Downloading NVDA {#DownloadingNVDA}
+
+The recommended place to download NVDA is from the NV Access download page at [https://www.nvaccess.org/download/](https://www.nvaccess.org/download/).
+
+NVDA can also be downloaded and installed using the Windows Package Manager (WinGet).
+Run the following command in Command Prompt (`cmd`) or PowerShell to install the latest version of NVDA:
+
+`winget install --id NVAccess.NVDA`
+
+To install beta or RC versions, use the following commands:
+
+* Beta: `winget install --id NVAccess.NVDA.Beta`
+* RC: `winget install --id NVAccess.NVDA.RC`
 
 ### Command Line Options {#CommandLineOptions}
 
@@ -5953,7 +6591,7 @@ Following are the command line options for NVDA:
 |`-q` |`--quit` |Quit already running copy of NVDA|
 |`-k` |`--check-running` |Report whether NVDA is running via the exit code; 0 if running, 1 if not running|
 |`-f LOGFILENAME` |`--log-file=LOGFILENAME` |The file where log messages should be written to. Logging is always disabled if secure mode is enabled.|
-|`-l LOGLEVEL` |`--log-level=LOGLEVEL` |The lowest level of message logged (debug 10, input/output 12, debug warning 15, info 20, disabled 100). Logging is always disabled if secure mode is enabled.|
+| `-l LOGLEVEL` | `--log-level=LOGLEVEL` | The lowest level of message logged (debug (unredacted) 5, debug 10, input/output 12, debug warning 15, info 20, disabled 100). Logging is always disabled if secure mode is enabled. |
 |`-c CONFIGPATH` |`--config-path=CONFIGPATH` |The path where all settings for NVDA are stored. The default value is forced if secure mode is enabled.|
 |`-n LANGUAGE` |`--lang=LANGUAGE` |Override the configured NVDA language. Set to "Windows" for current user default, "en" for English, etc.|
 |`-m` |`--minimal` |No sounds, no interface, no start message, etc.|
@@ -6006,3 +6644,5 @@ The following values can be set under this registry key:
 If you require further information or assistance regarding NVDA, please visit the [NVDA web site](NVDA_URL).
 Here, you can find additional documentation, as well as technical support and community resources.
 This site also provides information and resources concerning NVDA development.
+
+<!-- markdownlint-disable-file MD060 -->

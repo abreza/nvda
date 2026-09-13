@@ -1,11 +1,11 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2025 NV Access Limited
+# Copyright (C) 2025-2026 NV Access Limited
 # This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
 # For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
 """Functions exported by kernel32.dll, and supporting data structures and enumerations."""
 
-from ctypes import (
+from ctypes import (  # noqa: I001
 	WINFUNCTYPE,
 	Structure,
 	c_void_p,
@@ -44,95 +44,114 @@ from ctypes.wintypes import (
 	LARGE_INTEGER,
 	WCHAR,
 )
+from enum import IntEnum
 from serial.win32 import LPOVERLAPPED
+
 from .advapi32 import SECURITY_ATTRIBUTES
+from .jobapi2 import (
+	JOBOBJECTINFOCLASS,
+)
 
 ULONG_PTR = c_size_t
 LPSECURITY_ATTRIBUTES = POINTER(SECURITY_ATTRIBUTES)
 
 
 __all__ = (
-	"GetModuleHandle",
-	"GetModuleFileName",
-	"LoadLibraryEx",
-	"FreeLibrary",
+	"AttachConsole",
+	"CancelIoEx",
+	"CancelWaitableTimer",
 	"CloseHandle",
-	"ReleaseMutex",
-	"WaitForSingleObject",
-	"OpenProcess",
-	"VirtualAllocEx",
-	"VirtualFreeEx",
-	"ReadProcessMemory",
-	"WriteProcessMemory",
+	"CopyFile",
+	"CreateEvent",
+	"CreateFile",
+	"CreateMutex",
+	"CreatePipe",
+	"CreateWaitableTimer",
+	"DuplicateHandle",
+	"FileTimeToSystemTime",
+	"FreeConsole",
+	"FreeLibrary",
+	"GetACP",
+	"GetConsoleProcessList",
+	"GetConsoleScreenBufferInfo",
+	"GetConsoleSelectionInfo",
+	"GetConsoleWindow",
+	"GetCurrentProcess",
+	"GetCurrentThreadId",
+	"GetDateFormatEx",
+	"GetDriveType",
+	"GetExitCodeProcess",
+	"GetLastError",
+	"GetLocaleInfo",
+	"GetModuleFileName",
+	"GetModuleHandle",
+	"GetModuleHandleEx",
+	"GetOverlappedResult",
+	"GetPackageFullName",
+	"GetProcessInformation",
+	"GetStdHandle",
+	"GetSystemPowerStatus",
+	"GetThreadLocale",
+	"GetTimeFormatEx",
+	"GetUserDefaultUILanguage",
 	"GlobalAlloc",
 	"GlobalFree",
 	"GlobalLock",
 	"GlobalUnlock",
-	"GetCurrentProcess",
-	"SetUnhandledExceptionFilter",
-	"GetCurrentThreadId",
-	"OpenThread",
-	"QueueUserAPC",
-	"CreateEvent",
-	"CreateMutex",
-	"CreateWaitableTimer",
-	"SetEvent",
-	"ResetEvent",
-	"SetWaitableTimer",
-	"CancelWaitableTimer",
-	"WaitForMultipleObjects",
-	"SleepEx",
-	"SetThreadExecutionState",
-	"ReadFileEx",
-	"WriteFile",
-	"GetOverlappedResult",
-	"CancelIoEx",
-	"WaitCommEvent",
-	"CopyFile",
-	"GetLocaleInfo",
-	"LocaleNameToLCID",
-	"GetUserDefaultUILanguage",
-	"AttachConsole",
-	"FreeConsole",
-	"GetConsoleWindow",
-	"GetConsoleProcessList",
-	"GetConsoleScreenBufferInfo",
-	"GetConsoleSelectionInfo",
-	"ReadConsoleOutputCharacter",
-	"ReadConsoleOutput",
-	"SetConsoleCtrlHandler",
-	"GetModuleHandleEx",
-	"GetPackageFullName",
-	"QueryFullProcessImageName",
 	"IsWow64Process",
 	"IsWow64Process2",
-	"GetProcessInformation",
+	"LCIDToLocaleName",
+	"LoadLibraryEx",
+	"LocaleNameToLCID",
+	"MoveFileEx",
+	"OpenProcess",
+	"OpenThread",
+	"QueryFullProcessImageName",
+	"QueueUserAPC",
+	"ReadConsoleOutput",
+	"ReadConsoleOutputCharacter",
+	"ReadFileEx",
+	"ReadProcessMemory",
 	"RegisterApplicationRestart",
-	"GetLastError",
-	"GetStdHandle",
-	"CreateFile",
-	"GetSystemPowerStatus",
-	"GetThreadLocale",
+	"ReleaseMutex",
+	"ResetEvent",
+	"SetConsoleCtrlHandler",
+	"SetEvent",
+	"SetProcessShutdownParameters",
+	"SetThreadExecutionState",
+	"SetUnhandledExceptionFilter",
+	"SetWaitableTimer",
+	"SleepEx",
+	"SystemTimeToTzSpecificLocalTime",
+	"TerminateProcess",
+	"VirtualAllocEx",
+	"VirtualFreeEx",
+	"WaitCommEvent",
+	"WaitForMultipleObjects",
+	"WaitForSingleObject",
+	"WaitForSingleObjectEx",
 	"Wow64DisableWow64FsRedirection",
 	"Wow64RevertWow64FsRedirection",
-	"FileTimeToSystemTime",
-	"SystemTimeToTzSpecificLocalTime",
-	"GetDateFormatEx",
-	"GetTimeFormatEx",
-	"WaitForSingleObjectEx",
-	"SetProcessShutdownParameters",
-	"GetExitCodeProcess",
-	"TerminateProcess",
-	"GetDriveType",
-	"CreatePipe",
-	"DuplicateHandle",
-	"MoveFileEx",
-	"LCIDToLocaleName",
-	"GetACP",
+	"WriteFile",
+	"WriteProcessMemory",
 )
 
 
 dll = windll.kernel32
+
+
+class GENERIC(IntEnum):
+	"""Access rights which  are mapped to sets of standard and object-specific access rights by securable objects.
+
+	..seealso::
+		https://learn.microsoft.com/en-us/windows/win32/secauthz/generic-access-rights
+	"""
+
+	#: Write access.
+	WRITE = 0x40000000
+	#: Read access.
+	READ = 0x80000000
+
 
 GetModuleHandle = WINFUNCTYPE(None)(("GetModuleHandleW", dll))
 """
@@ -196,6 +215,20 @@ Releases ownership of the specified mutex object. The calling thread must have o
 """
 ReleaseMutex.argtypes = (HANDLE,)
 ReleaseMutex.restype = BOOL
+
+
+class WAIT(IntEnum):
+	"""Indicates the result of a Wait function."""
+
+	OBJECT_0 = 0x00000000
+	"""The state of the specified object is signaled."""
+
+	TIMEOUT = 0x00000102
+	"""The time-out interval elapsed, and the object's state is nonsignaled."""
+
+	FAILED = 0xFFFFFFFF
+	"""The function has failed."""
+
 
 WaitForSingleObject = WINFUNCTYPE(None)(("WaitForSingleObject", dll))
 """
@@ -281,6 +314,17 @@ WriteProcessMemory.argtypes = (
 )
 WriteProcessMemory.restype = BOOL
 
+
+class DUPLICATE(IntEnum):
+	"""Possible values of the dwOptions parameter to DuplicateHandle."""
+
+	CLOSE_SOURCE = 0x00000001
+	"""Closes the source handle, regardless of any error status returned."""
+
+	SAME_ACCESS = 0x00000002
+	"""The duplicate handle has the same access as the source handle, and the dwDesiredAccess parameter is ignored."""
+
+
 DuplicateHandle = WINFUNCTYPE(None)(("DuplicateHandle", dll))
 """
 Duplicates an object handle.
@@ -352,6 +396,15 @@ Retrieves a pseudo handle for the current process.
 """
 GetCurrentProcess.argtypes = ()
 GetCurrentProcess.restype = HANDLE
+
+GetCurrentProcessId = WINFUNCTYPE(None)(("GetCurrentProcessId", dll))
+"""
+Retrieves the process identifier of the calling process.
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocessid
+"""
+GetCurrentProcessId.argtypes = ()
+GetCurrentProcessId.restype = DWORD
 
 UnhandledExceptionFilter = WINFUNCTYPE(
 	c_void_p,  # lpTopLevelExceptionFilter: The pointer to the old unhandled exception filter function.
@@ -1534,3 +1587,163 @@ Retrieves the current OEM code page identifier.
 """
 GetOEMCP.argtypes = ()
 GetOEMCP.restype = UINT
+
+CreateJobObject = WINFUNCTYPE(None)(("CreateJobObjectW", dll))
+"""
+Creates or opens a job object.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-createjobobjectw
+"""
+CreateJobObject.argtypes = (
+	LPSECURITY_ATTRIBUTES,  # lpJobAttributes: A pointer to a SECURITY_ATTRIBUTES structure
+	LPCWSTR,  # lpName: The name of the job object
+)
+CreateJobObject.restype = HANDLE
+
+AssignProcessToJobObject = WINFUNCTYPE(None)(("AssignProcessToJobObject", dll))
+"""
+Associates a process with an existing job object.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject
+"""
+AssignProcessToJobObject.argtypes = (
+	HANDLE,  # hJob: A handle to the job object
+	HANDLE,  # hProcess: A handle to the process to be associated with the job object
+)
+AssignProcessToJobObject.restype = BOOL
+
+SetInformationJobObject = WINFUNCTYPE(None)(("SetInformationJobObject", dll))
+"""
+Sets limits for a job object.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-setinformationjobobject
+"""
+SetInformationJobObject.argtypes = (
+	HANDLE,  # hJob: A handle to the job object
+	JOBOBJECTINFOCLASS,  # JobObjectInfoClass: The information class for the job object
+	LPVOID,  # lpJobObjectInfo: A pointer to the job object information
+	DWORD,  # cbJobObjectInfoLength: The size of the job object information
+)
+SetInformationJobObject.restype = BOOL
+
+
+class PAGE(IntEnum):
+	"""
+	Specifies the page protection of a file mapping object.
+
+	.. note::
+		Possible values for the ``flProtect`` parameter of ``CreateFileMapping``.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
+	"""
+
+	EXECUTE_READ = 0x20
+	"""Allows views to be mapped for read-only, copy-on-write, or execute access."""
+
+	EXECUTE_READWRITE = 0x40
+	"""Allows views to be mapped for read-only, copy-on-write, read/write, or execute access."""
+
+	EXECUTE_WRITECOPY = 0x80
+	"""Allows views to be mapped for read-only, copy-on-write, or execute access."""
+
+	READONLY = 0x02
+	"""Allows views to be mapped for read-only or copy-on-write access."""
+
+	READWRITE = 0x04
+	"""Allows views to be mapped for read-only, copy-on-write, or read/write access."""
+
+	WRITECOPY = 0x08
+	"""Allows views to be mapped for read-only or copy-on-write access."""
+
+
+CreateFileMapping = WINFUNCTYPE(None)(("CreateFileMappingW", dll))
+"""
+Creates or opens a named or unnamed file mapping object for a specified file.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
+"""
+CreateFileMapping.restype = HANDLE
+CreateFileMapping.argtypes = (
+	HANDLE,  # hFile
+	LPSECURITY_ATTRIBUTES,  # lpFileMappingAttributes
+	DWORD,  # flProtect
+	DWORD,  # dwMaximumSizeHigh
+	DWORD,  # dwMaximumSizeLow
+	LPCWSTR,  # lpName
+)
+
+
+class FILE_MAP(IntEnum):
+	"""
+	The type of access to a file mapping object, which determines the page protection of the pages.
+
+	.. seealso::
+		https://learn.microsoft.com/en-us/windows/win32/memory/file-mapping-security-and-access-rights
+	"""
+
+	WRITE = 0x0002
+	"""
+	A read/write view of the file is mapped.
+
+	.. note::
+		When used with ``MapViewOfFile``, ``WRITE`` and ``ALL_ACCESS`` are equivalent.
+	"""
+
+	READ = 0x0004
+	"""A read-only view of the file is mapped."""
+
+	ALL_ACCESS = 0x000F001F
+	"""
+	A read/write view of the file is mapped.
+
+	.. note::
+		When used with ``MapViewOfFile``, ``ALL_ACCESS`` and ``WRITE`` are equivalent.
+	"""
+
+
+MapViewOfFile = WINFUNCTYPE(None)(("MapViewOfFile", dll))
+"""
+Maps a view of a file mapping into the address space of a calling process.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile
+"""
+MapViewOfFile.restype = LPVOID
+MapViewOfFile.argtypes = (
+	HANDLE,  # hFileMappingObject
+	DWORD,  # dwDesiredAccess
+	DWORD,  # dwFileOffsetHigh
+	DWORD,  # dwFileOffsetLow
+	c_size_t,  # dwNumberOfBytesToMap
+)
+
+UnmapViewOfFile = WINFUNCTYPE(None)(("UnmapViewOfFile", dll))
+"""
+Unmaps a mapped view of a file from the calling process's address space.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-unmapviewoffile
+"""
+UnmapViewOfFile.restype = BOOL
+UnmapViewOfFile.argtypes = (
+	LPCVOID,  # lpBaseAddress
+)
+
+OpenFileMapping = WINFUNCTYPE(None)(("OpenFileMappingW", dll))
+"""
+Opens a named file mapping object.
+
+.. seealso::
+	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-openfilemappingw
+"""
+OpenFileMapping.restype = HANDLE
+OpenFileMapping.argtypes = (
+	DWORD,  # dwDesiredAccess
+	BOOL,  # bInheritHandle
+	LPCWSTR,  # lpName
+)

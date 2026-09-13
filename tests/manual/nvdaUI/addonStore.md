@@ -46,6 +46,16 @@ Add-ons can be filtered by display name, publisher and description.
 1. Ensure that the add-ons list is sorted accordingly
 1. Change to different tabs, and repeat the previous steps.
 
+### Rapidly navigating the add-ons list
+
+1. Open the Add-on Store
+1. Change to the "Available add-ons" tab and enable the "Include incompatible add-ons" filter, to get a long list.
+1. Tab to the list of add-ons.
+1. Hold down the arrow keys to move through the list quickly, then release.
+1. Ensure NVDA stays responsive and does not freeze.
+1. After stopping, tab to the details view.
+1. Ensure the details update to show the currently selected add-on.
+
 ### Failure to fetch add-ons available for download
 
 1. Disable your internet connection
@@ -297,7 +307,7 @@ Typically, this requires a contributor creating 3 different versions of the same
 * (X+1).1 e.g `CURRENT=2024.1`, `BACK_COMPAT_TO=2024.1`
 
 | Test Name | Upgrade from | Upgrade to | Test notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Upgrade to different NVDA version in the same API breaking release cycle | X.1 | X.1 | Add-ons which remain incompatible are listed as incompatible on upgrading. Preserves state of enabled incompatible add-ons |
 | Upgrade to a different but compatible API version | X.1 | X.2 | Add-ons which remain incompatible are listed as incompatible on upgrading. Preserves state of enabled incompatible add-ons |
 | Downgrade to a different but compatible API version | X.2 | X.1 | Add-ons which remain incompatible are listed as incompatible on upgrading. Preserves state of enabled incompatible add-ons |

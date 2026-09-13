@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2009-2025 NV Access Limited, Cyrille Bougot, Christopher Toth
+# Copyright (C) 2009-2026 NV Access Limited, Cyrille Bougot, Christopher Toth
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
 
@@ -7,7 +8,7 @@
 Performs miscellaneous tasks which need to be performed in a separate process.
 """
 
-import sys
+import sys  # noqa: I001
 import os
 import globalVars
 import logHandler
@@ -34,7 +35,7 @@ globalVars.appPid = os.getpid()
 
 
 def getNvdaHelperRemote():
-	import ctypes
+	import ctypes  # noqa: I001
 	import winKernel
 
 	h = winBindings.kernel32.LoadLibraryEx(
@@ -70,14 +71,14 @@ def main():
 
 			COMRegistrationFixes.fixCOMRegistrations()
 		elif action == "launchNVDA":
-			import subprocess
+			import subprocess  # noqa: I001
 			import shellapi
 			import winUser
 
 			shellapi.ShellExecute(
 				0,
 				None,
-				r"%s\nvda.exe" % sys.prefix,
+				r"%s\nvda.exe" % sys.prefix,  # noqa: UP031
 				subprocess.list2cmdline(args),
 				None,
 				winUser.SW_SHOWNORMAL,
@@ -85,7 +86,7 @@ def main():
 		elif action == "setNvdaSystemConfig":
 			import config
 
-			config._setSystemConfig(args[0])
+			config._setSystemConfig(args[0], addonsToCopy=args[1:])
 		elif action == "config_setStartOnLogonScreen":
 			enable = bool(int(args[0]))
 			import config
@@ -112,7 +113,7 @@ def main():
 						# Translators: the message that is shown when the user tries to install an add-on
 						# from windows explorer and NVDA is not running.
 						"Cannot install NVDA add-on from {path}.\n"
-						"You must be running NVDA to be able to install add-ons."
+						"You must be running NVDA to be able to install add-ons.",
 					).format(path=addonPath),
 					0,
 					winUser.MB_ICONERROR,
@@ -124,13 +125,13 @@ def main():
 				if ret != 0:
 					raise RuntimeError(f"URL handling failed with code {ret}")
 			except Exception:
-				logHandler.log.error("Error handling remote URL", exc_info=True)
+				logHandler.log.error("Error handling remote URL", exc_info=True)  # noqa: G201
 				sys.exit(1)
 		elif action == "comGetActiveObject":
 			import comHelper
 
 			# py2exe scraps sys.stdout.
-			sys.__stdout__.write("%s\n" % comHelper._lresultFromGetActiveObject(args[0], bool(int(args[1]))))
+			sys.__stdout__.write("%s\n" % comHelper._lresultFromGetActiveObject(args[0], bool(int(args[1]))))  # noqa: UP031
 			sys.__stdout__.flush()
 			try:
 				input()
@@ -140,10 +141,10 @@ def main():
 			raise ValueError("No such action")
 
 	except installer.RetriableFailure:
-		logHandler.log.error("Task failed, try again", exc_info=True)
+		logHandler.log.error("Task failed, try again", exc_info=True)  # noqa: G201
 		sys.exit(2)
 	except Exception:
-		logHandler.log.error("slave error", exc_info=True)
+		logHandler.log.error("slave error", exc_info=True)  # noqa: G201
 		sys.exit(1)
 
 

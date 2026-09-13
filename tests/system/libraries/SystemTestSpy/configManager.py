@@ -8,10 +8,9 @@ This module is designed to construct and install the speechSpyGlobalPlugin, spee
 NVDA config before NVDA is started by the system tests.
 """
 
-from os.path import join as _pJoin
+from os.path import join as _pJoin  # noqa: I001
 from .getLib import _getLib
 import sys
-from typing import Optional
 
 # Imported for type information
 from robot.libraries.BuiltIn import BuiltIn
@@ -32,7 +31,7 @@ def _findDepPath(depFileName, searchPaths):
 			return filePath
 		elif os.path.isfile(_pJoin(path, depFileName, "__init__.py")):
 			return _pJoin(path, depFileName)
-	raise AssertionError("Unable to find required system test spy dependency: {}".format(depFileName))
+	raise AssertionError(f"Unable to find required system test spy dependency: {depFileName}")
 
 
 def _installSystemTestSpyToScratchPad(repoRoot: str, scratchPadDir: str):
@@ -97,7 +96,7 @@ def setupProfile(
 	repoRoot: str,
 	settingsFileName: str,
 	stagingDir: str,
-	gesturesFileName: Optional[str] = None,
+	gesturesFileName: str | None = None,
 ):
 	builtIn.log("Copying files into NVDA profile", level="DEBUG")
 	opSys.copy_file(
@@ -105,9 +104,6 @@ def setupProfile(
 		_pJoin(repoRoot, "tests", "system", "nvdaSettingsFiles", settingsFileName),
 		_pJoin(stagingDir, "nvdaProfile", "nvda.ini"),
 	)
-	if _shouldGenerateMockModel(_pJoin(stagingDir, "nvdaProfile", "nvda.ini")):
-		_configModels(_pJoin(stagingDir, "nvdaProfile", "models", "mock", "vit-gpt2-image-captioning"))
-
 	if gesturesFileName is not None:
 		opSys.copy_file(
 			# Despite duplication, specify full paths for clarity.
@@ -131,26 +127,3 @@ def teardownProfile(stagingDir: str):
 		_pJoin(stagingDir, "nvdaProfile"),
 		recursive=True,
 	)
-
-
-def _configModels(modelsDirectory: str) -> None:
-	from .mockModels import MockVisionEncoderDecoderGenerator
-
-	generator = MockVisionEncoderDecoderGenerator(randomSeed=8)
-	generator.generateAllFiles(modelsDirectory)
-
-
-def _shouldGenerateMockModel(iniPath: str) -> bool:
-	# Read original lines
-	with open(iniPath, "r", encoding="utf-8") as f:
-		lines = f.readlines()
-
-	for line in lines:
-		# Detect section headers
-		stripLine = line.strip()
-		if stripLine.startswith("[") and stripLine.endswith("]"):
-			hasCaptionSection = stripLine.lower() == "[automatedimagedescriptions]"
-			if hasCaptionSection:
-				return True
-			else:
-				continue

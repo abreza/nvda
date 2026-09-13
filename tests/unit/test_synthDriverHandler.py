@@ -5,11 +5,11 @@
 
 """Unit tests for the synthDriverHandler"""
 
-import config
+import config  # noqa: I001
 import languageHandler
 import synthDriverHandler
 from synthDrivers.oneCore import SynthDriver as OneCoreSynthDriver
-from typing import Callable
+from collections.abc import Callable
 import unittest
 from .extensionPointTestHelpers import actionTester
 
@@ -120,7 +120,7 @@ class test_synthDriverHandler(unittest.TestCase):
 		self.assertEqual(synthDriverHandler.getSynth().name, "espeak")
 
 	def test_synthChangedExtensionPoint(self):
-		expectedKwargs = dict(
+		expectedKwargs = dict(  # noqa: C408
 			isFallback=False,
 			audioOutputDevice="default",
 		)
@@ -132,3 +132,39 @@ class test_synthDriverHandler(unittest.TestCase):
 			**expectedKwargs,
 		):
 			synthDriverHandler.setSynth("auto")
+
+
+class TestLanguageIsSupported(unittest.TestCase):
+	def setUp(self) -> None:
+		self._synth = MockSynth(FAKE_DEFAULT_SYNTH_NAME)
+		self._synth.availableLanguages = set()
+
+	def tearDown(self) -> None:
+		del self._synth
+
+	def _languageIsSupported(self, lang: str | None) -> bool:
+		return synthDriverHandler.SynthDriver.languageIsSupported(self._synth, lang)
+
+	def test_noneLanguageIsSupported(self):
+		self._synth.availableLanguages = {"en_US"}
+		self.assertTrue(self._languageIsSupported(None))
+
+	def test_normalizedExactLanguageMatch(self):
+		self._synth.availableLanguages = {"en_US"}
+		self.assertTrue(self._languageIsSupported("en-us"))
+
+	def test_rootLanguageMatch(self):
+		self._synth.availableLanguages = {"en_GB"}
+		self.assertTrue(self._languageIsSupported("en"))
+
+	def test_unsupportedLanguage(self):
+		self._synth.availableLanguages = {"en_US"}
+		self.assertFalse(self._languageIsSupported("fr"))
+
+	def test_metaAndNoneAvailableLanguagesIgnored(self):
+		self._synth.availableLanguages = {None, "x-western", "en_US"}
+		self.assertTrue(self._languageIsSupported("en"))
+
+	def test_metaInputLanguageNotSupported(self):
+		self._synth.availableLanguages = {"en_US"}
+		self.assertFalse(self._languageIsSupported("x-western"))

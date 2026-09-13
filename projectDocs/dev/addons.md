@@ -6,10 +6,9 @@
 * [NVDA Add-on API Mailing List](https://groups.google.com/a/nvaccess.org/g/nvda-api)
 * [The NVDA Add-on Store](https://download.nvaccess.org/documentation/userGuide.html#AddonsManager)
 * [Submitting to the NVDA Add-on Store](https://github.com/nvaccess/addon-datastore/blob/master/docs/submitters/submissionGuide.md)
-* [Community add-ons website](https://addons.nvda-project.org/).
-This website is considered legacy software, using the NVDA Add-on Store instead is encouraged.
+* [Add-on Store website](https://addonstore.nvaccess.org/)
 * [NVDA add-ons community coordination and support center](https://github.com/nvdaaddons): all about NVDA's add-ons environment
-* [NVDA add-ons community template](https://github.com/nvdaaddons/AddonTemplate): A repository for generating add-ons using a template
+* [NVDA add-on template](https://github.com/nvaccess/AddonTemplate): A repository for generating add-ons using a template
 * The NVDA repository [Wiki](https://github.com/nvaccess/nvda/wiki) contains more guides and documentation.
 
 ## Documentation
@@ -18,6 +17,8 @@ This website is considered legacy software, using the NVDA Add-on Store instead 
 * [NVDA Developer Guide](https://download.nvaccess.org/documentation/developerGuide.html)
 * [Technical design overview](../design/technicalDesignOverview.md)
 * [NVDA Add-on Development Community Guide](https://github.com/nvdaaddons/DevGuide/wiki/NVDA-Add-on-Development-Guide)
+* [Addon localization guide for add-on authors](https://github.com/nvaccess/AddonTemplate/blob/master/docs/l10n/addonAuthors.md)
+* [Addon localization guide for translators](https://github.com/nvaccess/AddonTemplate/blob/master/docs/l10n/addonTranslators.md)
 * [NVDA ControllerClient manual (NVDA API for external applications to directly speak or braille messages, etc.)](../../extras/controllerClient)
 
 ## Communication channels

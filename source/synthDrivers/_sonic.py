@@ -3,7 +3,7 @@
 # See the file COPYING for more details.
 # Copyright (C) 2025 NV Access Limited, gexgd0419
 
-from ctypes import CDLL, POINTER, Array, c_float, c_int, c_short, c_ubyte, c_void_p, cdll
+from ctypes import CDLL, POINTER, Array, c_float, c_int, c_short, c_ubyte, c_void_p, cdll  # noqa: I001
 import os
 from typing import TYPE_CHECKING
 import globalVars
@@ -20,6 +20,9 @@ else:
 	c_short_p = POINTER(c_short)
 	c_ubyte_p = POINTER(c_ubyte)
 
+
+SONIC_DLL_PATH = os.path.join(globalVars.appDir, "synthDrivers", "sonic.dll")
+
 sonicLib: CDLL | None = None
 
 
@@ -35,7 +38,7 @@ def initialize():
 	if sonicLib:
 		return
 	log.debug("Initializing Sonic library")
-	sonicLib = cdll.LoadLibrary(os.path.join(globalVars.appDir, "synthDrivers", "sonic.dll"))
+	sonicLib = cdll.LoadLibrary(SONIC_DLL_PATH)
 	sonicLib.sonicCreateStream.restype = SonicStreamP
 	sonicLib.sonicCreateStream.argtypes = [c_int, c_int]
 	sonicLib.sonicDestroyStream.restype = None

@@ -1,5 +1,5 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2015-2025 NV Access Limited, Christopher Toth, Tyler Spivey, Babbage B.V., David Sexton and others.
+# Copyright (C) 2015-2026 NV Access Limited, Christopher Toth, Tyler Spivey, Babbage B.V., David Sexton and others.
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
 
@@ -19,34 +19,42 @@ Note:
     to exchange connection information between sessions.
 """
 
-from enum import IntEnum
-import json
+import json  # noqa: I001
 import socket
 import threading
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from ctypes import (
-	POINTER,
 	FormatError,
 	GetLastError,
-	c_size_t,
 	sizeof,
-	windll,
 	create_unicode_buffer,
-	WINFUNCTYPE,
 	wstring_at,
 )
-from ctypes.wintypes import BOOL, DWORD, HANDLE, LPCVOID, LPCWSTR, LPVOID, WCHAR
+from ctypes.wintypes import WCHAR
 from serial.win32 import INVALID_HANDLE_VALUE
 
 import shlobj
 from logHandler import log
 from winAPI.secureDesktop import post_secureDesktopStateChange
 from NVDAHelper import localLib
-from winBindings import kernel32 as _kernel32
+from winBindings.kernel32 import (
+	FILE_MAP,
+	PAGE,
+	WAIT,
+	CreateEvent,
+	CreateFileMapping,
+	GetModuleFileName,
+	MapViewOfFile,
+	OpenFileMapping,
+	ResetEvent,
+	SetEvent,
+	UnmapViewOfFile,
+	WaitForSingleObject,
+)
 from winKernel import closeHandle
-from winKernel import ERROR_ALREADY_EXISTS, SECURITY_ATTRIBUTES
+from winKernel import ERROR_ALREADY_EXISTS
 
 from . import bridge, server
 from .connectionInfo import ConnectionInfo, ConnectionMode
@@ -54,193 +62,6 @@ from .protocol import RemoteMessageType
 from .serializer import JSONSerializer
 from .session import FollowerSession
 from .transport import RelayTransport
-
-
-class PAGE(IntEnum):
-	"""
-	Specifies the page protection of a file mapping object.
-
-	.. note::
-		Possible values for the ``flProtect`` parameter of ``CreateFileMapping``.
-
-	.. seealso::
-		https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
-	"""
-
-	EXECUTE_READ = 0x20
-	"""Allows views to be mapped for read-only, copy-on-write, or execute access."""
-
-	EXECUTE_READWRITE = 0x40
-	"""Allows views to be mapped for read-only, copy-on-write, read/write, or execute access."""
-
-	EXECUTE_WRITECOPY = 0x80
-	"""Allows views to be mapped for read-only, copy-on-write, or execute access."""
-
-	READONLY = 0x02
-	"""Allows views to be mapped for read-only or copy-on-write access."""
-
-	READWRITE = 0x04
-	"""Allows views to be mapped for read-only, copy-on-write, or read/write access."""
-
-	WRITECOPY = 0x08
-	"""Allows views to be mapped for read-only or copy-on-write access."""
-
-
-class FILE_MAP(IntEnum):
-	"""
-	The type of access to a file mapping object, which determines the page protection of the pages.
-
-	.. seealso::
-		https://learn.microsoft.com/en-us/windows/win32/memory/file-mapping-security-and-access-rights
-	"""
-
-	WRITE = 0x0002
-	"""
-	A read/write view of the file is mapped.
-
-	.. note::
-		When used with ``MapViewOfFile``, ``WRITE`` and ``ALL_ACCESS`` are equivalent.
-	"""
-
-	READ = 0x0004
-	"""A read-only view of the file is mapped."""
-
-	ALL_ACCESS = 0x000F001F
-	"""
-	A read/write view of the file is mapped.
-
-	.. note::
-		When used with ``MapViewOfFile``, ``ALL_ACCESS`` and ``WRITE`` are equivalent.
-	"""
-
-
-class WAIT(IntEnum):
-	"""Indicates the result of a Wait function."""
-
-	OBJECT_0 = 0x00000000
-	"""The state of the specified object is signaled."""
-
-	TIMEOUT = 0x00000102
-	"""The time-out interval elapsed, and the object's state is nonsignaled."""
-
-	FAILED = 0xFFFFFFFF
-	"""The function has failed."""
-
-
-kernel32 = windll.kernel32
-CreateFileMapping = WINFUNCTYPE(HANDLE, HANDLE, POINTER(SECURITY_ATTRIBUTES), DWORD, DWORD, DWORD, LPCWSTR)(
-	("CreateFileMappingW", kernel32),
-	(
-		(1, "hFile"),
-		(1, "lpFileMappingAttributes"),
-		(1, "flProtect"),
-		(1, "dwMaximumSizeHigh"),
-		(1, "dwMaximumSizeLow"),
-		(1, "lpName"),
-	),
-)
-"""
-Creates or opens a named or unnamed file mapping object for a specified file.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
-"""
-
-MapViewOfFile = WINFUNCTYPE(LPVOID, HANDLE, DWORD, DWORD, DWORD, c_size_t)(
-	("MapViewOfFile", kernel32),
-	(
-		(1, "hFileMappingObject"),
-		(1, "dwDesiredAccess"),
-		(1, "dwFileOffsetHigh"),
-		(1, "dwFileOffsetLow"),
-		(1, "dwNumberOfBytesToMap"),
-	),
-)
-"""
-Maps a view of a file mapping into the address space of a calling process.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile
-"""
-
-UnmapViewOfFile = WINFUNCTYPE(BOOL, LPCVOID)(
-	("UnmapViewOfFile", kernel32),
-	((1, "lpBaseAddress"),),
-)
-"""
-Unmaps a mapped view of a file from the calling process's address space.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-unmapviewoffile
-"""
-
-OpenFileMapping = WINFUNCTYPE(HANDLE, DWORD, BOOL, LPCWSTR)(
-	("OpenFileMappingW", kernel32),
-	(
-		(1, "dwDesiredAccess"),
-		(1, "bInheritHandle"),
-		(1, "lpName"),
-	),
-)
-"""
-Opens a named file mapping object.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-openfilemappingw
-"""
-
-
-CreateEvent = WINFUNCTYPE(HANDLE, LPVOID, BOOL, BOOL, LPCWSTR)(
-	("CreateEventW", kernel32),
-	(
-		(1, "lpEventAttributes"),
-		(1, "bManualReset"),
-		(1, "bInitialState"),
-		(1, "lpName"),
-	),
-)
-"""
-Creates or opens a named or unnamed event object.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createeventw
-"""
-
-WaitForSingleObject = WINFUNCTYPE(DWORD, HANDLE, DWORD)(
-	("WaitForSingleObject", kernel32),
-	(
-		(1, "hHandle"),
-		(1, "dwMilliseconds"),
-	),
-)
-"""
-Waits until the specified object is in the signaled state or the time-out interval elapses.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject
-"""
-
-SetEvent = WINFUNCTYPE(BOOL, HANDLE)(
-	("SetEvent", kernel32),
-	((1, "hEvent"),),
-)
-"""
-Sets the specified event object to the signaled state.
-
-.. seealso::
-
-"""
-
-ResetEvent = WINFUNCTYPE(BOOL, HANDLE)(
-	("ResetEvent", kernel32),
-	((1, "hEvent"),),
-)
-"""
-Sets the specified event object to the nonsignaled state.
-
-.. seealso::
-	https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-resetevent
-"""
 
 
 def getProgramDataTempPath() -> Path:
@@ -288,10 +109,10 @@ class SecureDesktopHandler:
 			raise RuntimeError(f"Unable to get handle to IPC event. {GetLastError()}: {FormatError()}")
 		log.debug("Initialized SecureDesktopHandler")
 
-		self._followerSession: Optional[FollowerSession] = None
-		self.sdServer: Optional[server.LocalRelayServer] = None
-		self.sdRelay: Optional[RelayTransport] = None
-		self.sdBridge: Optional[bridge.BridgeTransport] = None
+		self._followerSession: FollowerSession | None = None
+		self.sdServer: server.LocalRelayServer | None = None
+		self.sdRelay: RelayTransport | None = None
+		self.sdBridge: bridge.BridgeTransport | None = None
 
 		post_secureDesktopStateChange.register(self._onSecureDesktopChange)
 
@@ -305,10 +126,10 @@ class SecureDesktopHandler:
 			log.debugWarning(f"Error closing handle to IPC event. {GetLastError()}: {FormatError()}")
 		# We shouldn't be in a situation where we have shared IPC data,
 		# but it's still good to check and clean it up if we do.
-		if self._bufferAddress is not None:
+		if self._bufferAddress is not None:  # noqa: SIM102
 			if not UnmapViewOfFile(self._bufferAddress):
 				log.debugWarning(f"Error unmapping IPC shared memory. {GetLastError()}: {FormatError()}")
-		if self._mapFile is not None:
+		if self._mapFile is not None:  # noqa: SIM102
 			if not closeHandle(self._mapFile):
 				log.debugWarning(
 					f"Error closing handle to IPC file mapping. {GetLastError()}: {FormatError()}",
@@ -316,11 +137,11 @@ class SecureDesktopHandler:
 		log.info("Secure desktop cleanup completed")
 
 	@property
-	def followerSession(self) -> Optional[FollowerSession]:
+	def followerSession(self) -> FollowerSession | None:
 		return self._followerSession
 
 	@followerSession.setter
-	def followerSession(self, session: Optional[FollowerSession]) -> None:
+	def followerSession(self, session: FollowerSession | None) -> None:
 		"""Update follower session reference and handle necessary cleanup/setup."""
 		if self._followerSession == session:
 			log.debug("Follower session unchanged, skipping update")
@@ -340,7 +161,7 @@ class SecureDesktopHandler:
 				self._onLeaderDisplayChange,
 			)
 
-	def _onSecureDesktopChange(self, isSecureDesktop: Optional[bool] = None) -> None:
+	def _onSecureDesktopChange(self, isSecureDesktop: bool | None = None) -> None:
 		"""Internal callback for secure desktop state changes.
 
 		:param isSecureDesktop: True if transitioning to secure desktop, False otherwise
@@ -403,7 +224,7 @@ class SecureDesktopHandler:
 			if buffer[-1] != "\x00":
 				raise ValueError("Insufficient length for null terminator.")
 		except ValueError:
-			log.exception("Failed to write IPC data.", exc_info=True)
+			log.exception("Failed to write IPC data.", exc_info=True)  # noqa: G202
 			if not UnmapViewOfFile(bufferAddress):
 				log.debugWarning(f"Error unmapping IPC shared memory. {GetLastError()}: {FormatError()}")
 			if not closeHandle(mapFile):
@@ -412,7 +233,7 @@ class SecureDesktopHandler:
 				)
 			self.sdServer.close()
 			self.sdServer = None
-			return None
+			return
 
 		serverThread = threading.Thread(target=self.sdServer.run)
 		serverThread.daemon = True
@@ -484,7 +305,7 @@ class SecureDesktopHandler:
 				)
 			self._mapFile = None
 
-	def initializeSecureDesktop(self) -> Optional[ConnectionInfo]:
+	def initializeSecureDesktop(self) -> ConnectionInfo | None:
 		"""Initialize connection when starting in secure desktop.
 
 		:return: Connection information if successful, None on failure
@@ -523,7 +344,7 @@ class SecureDesktopHandler:
 
 			# Check that a socket is open on the right IP and port and with the same owning process image
 			processImageName = create_unicode_buffer(1024)
-			_kernel32.GetModuleFileName(0, processImageName, 1024)
+			GetModuleFileName(0, processImageName, 1024)
 			if not localLib.localListeningSocketExists(port, processImageName):
 				raise RuntimeError("Matching socket not open.")
 

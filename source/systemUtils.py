@@ -1,17 +1,21 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2020-2025 NV Access Limited, Łukasz Golonka, Luke Davis, Leonard de Ruijter
+# Copyright (C) 2020-2026 NV Access Limited, Łukasz Golonka, Luke Davis, Leonard de Ruijter
 # This file may be used under the terms of the GNU General Public License, version 2 or later.
 # For more details see: https://www.gnu.org/licenses/gpl-2.0.html
 
 """System related functions."""
 
+from contextlib import contextmanager  # noqa: I001
 import ctypes
 import time
 import threading
 from collections.abc import (
 	Callable,
+	Generator,
 )
 from ctypes import (
+	FormatError,
+	GetLastError,
 	byref,
 	create_unicode_buffer,
 	sizeof,
@@ -19,7 +23,6 @@ from ctypes import (
 import ctypes.wintypes
 from typing import (
 	Generic,
-	Optional,
 	TypeVar,
 )
 
@@ -224,7 +227,7 @@ class ExecAndPump(threading.Thread, Generic[_execAndPumpResT]):
 		# Intentionally uses older syntax with `Optional`, instead of `_execAndPumpResT | None`,
 		# as latter is not yet supported for unions potentially containing two instances of `None`
 		# (see CPython issue 107271).
-		self.funcRes: Optional[_execAndPumpResT] = None
+		self.funcRes: _execAndPumpResT | None = None
 		fname = repr(func)
 		super().__init__(
 			name=f"{self.__class__.__module__}.{self.__class__.__qualname__}({fname})",
@@ -245,7 +248,7 @@ class ExecAndPump(threading.Thread, Generic[_execAndPumpResT]):
 	def run(self):
 		try:
 			self.funcRes = self.func(*self.args, **self.kwargs)
-		except Exception as e:
+		except Exception as e:  # noqa: BLE001
 			self.threadExc = e
 			log.debugWarning("task had errors", exc_info=True)
 
@@ -272,3 +275,26 @@ def preventSystemIdle(preventDisplayTurningOff: bool | None = None, persistent: 
 def resetThreadExecutionState() -> None:
 	"""Reset the thread execution state to the default."""
 	winBindings.kernel32.SetThreadExecutionState(winKernel.ES_CONTINUOUS)
+
+
+@contextmanager
+def getCurrentProcessToken(desiredAccess: int) -> Generator[ctypes.wintypes.HANDLE]:
+	"""Context manager which provides access to the access token associated with the current process.
+
+	Handles closing the handle to the access token when the context manager is exited.
+
+	:param desiredAccess: Access mask specifying the requested types of access to the access token.
+	:raises OSError: If calling OpenProcessToken fails.
+	:yield: A handle that identifies the newly opened access token.
+	"""
+	currentProcessToken = ctypes.wintypes.HANDLE()
+	if not winBindings.advapi32.OpenProcessToken(
+		winBindings.kernel32.GetCurrentProcess(),
+		desiredAccess,
+		byref(currentProcessToken),
+	):
+		raise OSError(None, FormatError(), None, GetLastError())
+	try:
+		yield currentProcessToken
+	finally:
+		winBindings.kernel32.CloseHandle(currentProcessToken)

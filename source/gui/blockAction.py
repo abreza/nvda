@@ -3,7 +3,7 @@
 # This file is covered by the GNU General Public License.
 # See the file COPYING for more details.
 
-from collections.abc import Callable
+from collections.abc import Callable  # noqa: I001
 import config
 from config.configFlags import BrailleMode
 from dataclasses import dataclass
@@ -37,14 +37,6 @@ def _isRemoteAccessDisabled() -> bool:
 	from _remoteClient import remoteRunning
 
 	return not remoteRunning()
-
-
-def _isScreenCurtainEnabled() -> bool:
-	"""Whether screen curtain functionality is **enabled**."""
-	# Import late to avoid circular import
-	from screenCurtain import screenCurtain
-
-	return screenCurtain is not None and screenCurtain.enabled
 
 
 @dataclass
@@ -93,11 +85,6 @@ class Context(_Context, Enum):
 		_isRemoteAccessDisabled,
 		# Translators: Reported when an action cannot be performed because Remote Access functionality is disabled.
 		pgettext("remote", "Action unavailable when Remote Access is disabled"),
-	)
-	SCREEN_CURTAIN = (
-		lambda: _isScreenCurtainEnabled(),
-		# Translators: Reported when an action cannot be performed because screen curtain is enabled.
-		_("Action unavailable while screen curtain is enabled"),
 	)
 
 

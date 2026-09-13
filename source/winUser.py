@@ -9,7 +9,7 @@ Functions that wrap Windows API functions from user32.dll.
 When working on this file, consider moving to winAPI.
 """
 
-import contextlib
+import contextlib  # noqa: I001
 import ctypes
 from ctypes import (
 	byref,
@@ -17,7 +17,6 @@ from ctypes import (
 	Structure,
 	c_long,
 	c_short,
-	c_uint,
 	c_wchar,
 	create_unicode_buffer,
 	sizeof,
@@ -120,6 +119,7 @@ __getattr__ = _deprecate.handleDeprecations(
 	_deprecate.MovedSymbol("INPUT_KEYBOARD", "winBindings.user32", "INPUT_TYPE", "KEYBOARD"),
 	_deprecate.MovedSymbol("KEYEVENTF_KEYUP", "winBindings.user32", "KEYEVENTF", "KEYUP"),
 	_deprecate.MovedSymbol("KEYEVENTF_UNICODE", "winBindings.user32", "KEYEVENTF", "UNICODE"),
+	_deprecate.MovedSymbol("NMHdrStruct", "winBindings.user32", "NMHDR"),
 )
 """Module __getattr__ to handle backward compatibility."""
 
@@ -135,14 +135,6 @@ HCURSOR = c_long
 CS_HREDRAW = 0x0002
 #: Redraws the entire window if a movement or size adjustment changes the height of the client area.
 CS_VREDRAW = 0x0001
-
-
-class NMHdrStruct(Structure):
-	_fields_ = [
-		("hwndFrom", HWND),
-		("idFrom", c_uint),
-		("code", c_uint),
-	]
 
 
 # constants
@@ -186,6 +178,7 @@ WS_EX_LAYERED = 0x80000
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_TRANSPARENT = 0x00000020
 WS_EX_APPWINDOW = 0x00040000
+WS_EX_LAYOUTRTL = 0x00400000
 WS_EX_NOACTIVATE = 0x08000000
 BS_GROUPBOX = 7
 ES_MULTILINE = 4
@@ -546,8 +539,19 @@ def isWindow(hwnd):
 	return _user32.IsWindow(hwnd)
 
 
+def isHungAppWindow(hwnd: HWNDVal) -> bool:
+	"""Whether the system considers the given window's application to be not responding.
+
+	See `winBindings.user32.IsHungAppWindow`. This is a read-only query against the
+	window manager's input-processing state; it does not pump messages or enter the
+	target process, so it is safe to call from any thread (including the UIA event
+	delivery thread).
+	"""
+	return bool(_user32.IsHungAppWindow(hwnd))
+
+
 def isDescendantWindow(parentHwnd, childHwnd):
-	if (parentHwnd == childHwnd) or _user32.IsChild(parentHwnd, childHwnd):
+	if (parentHwnd == childHwnd) or _user32.IsChild(parentHwnd, childHwnd):  # noqa: SIM103
 		return True
 	else:
 		return False
@@ -689,7 +693,7 @@ def SetLayeredWindowAttributes(hwnd, key, alpha, flags):
 def getPreviousWindow(hwnd: HWNDVal) -> HWNDVal:
 	try:
 		hwnd = _user32.GetWindow(hwnd, GW_HWNDPREV)
-	except WindowsError:
+	except OSError:
 		return 0
 	return hwnd or 0
 
@@ -765,7 +769,7 @@ class STICKYKEYS(Structure):
 	)
 
 	def __init__(self, **kwargs):
-		super(STICKYKEYS, self).__init__(cbSize=sizeof(self), **kwargs)
+		super().__init__(cbSize=sizeof(self), **kwargs)
 
 
 SKF_STICKYKEYSON = 0x00000001
@@ -806,7 +810,7 @@ def paint(hwnd: int, paintStruct: _PAINTSTRUCT | None = None):
 		winBindings.user32.EndPaint(hwnd, byref(paintStruct))
 
 
-class WinTimer(object):
+class WinTimer:
 	"""Object that wraps the SetTimer function in user32.
 	The timer is automatically destroyed using KillTimer when the object is terminated using L{terminate}.
 	"""

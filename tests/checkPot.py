@@ -6,8 +6,7 @@
 
 """Check a translation template (pot) for strings without translator comments."""
 
-import sys
-from typing import Set
+import sys  # noqa: I001
 
 
 # Existing messages that we know don't have translator comments yet.
@@ -47,8 +46,6 @@ EXPECTED_MESSAGES_WITHOUT_COMMENTS = {
 	"column break",
 	"background pattern {pattern}",
 	"NVDA Speech Viewer",
-	"text mode",
-	"object mode",
 	"NonVisual Desktop Access",
 	"A free and open source screen reader for Microsoft Windows",
 	"Copyright (C) {years} NVDA Contributors",
@@ -91,7 +88,7 @@ def checkPot(fileName):
 	errors = 0
 	expectedErrors = 0
 	unexpectedSuccesses = 0
-	foundMessagesWithOutComments: Set[str] = set()
+	foundMessagesWithOutComments: set[str] = set()
 	with open(fileName, "rt", encoding="utf-8") as pot:
 		passedHeader = False
 		for line in pot:
@@ -136,7 +133,7 @@ def checkPot(fileName):
 					# 	"keys are passed to the application"
 					msgid = ""
 					for line in pot:
-						if line.startswith("msgstr ") or line.startswith("msgid_plural"):
+						if line.startswith("msgstr ") or line.startswith("msgid_plural"):  # noqa: PIE810
 							# This begins the translated or plural message, so msgid has ended.
 							break
 						msgid += getStringFromLine(line)
@@ -146,7 +143,7 @@ def checkPot(fileName):
 					msgid = getStringFromLine(line)
 				if context:
 					# The context must be considered as part of the message.
-					message = "[{context}] {msgid}".format(context=context, msgid=msgid)
+					message = f"[{context}] {msgid}"
 				else:
 					message = msgid
 				isExpectedError = message in EXPECTED_MESSAGES_WITHOUT_COMMENTS
@@ -204,6 +201,6 @@ def getStringFromLine(line):
 
 
 if __name__ == "__main__":
-	# Support command line usage for quick testing.
 	fileName = sys.argv[1]
-	print(checkPot(fileName))
+	results = checkPot(fileName)
+	sys.exit(results)

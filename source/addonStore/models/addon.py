@@ -1,8 +1,9 @@
 # A part of NonVisual Desktop Access (NVDA)
-# Copyright (C) 2022-2023 NV Access Limited
-# This file is covered by the GNU General Public License.
-# See the file COPYING for more details.
+# Copyright (C) 2022-2026 NV Access Limited
+# This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
+# For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
+from collections.abc import Generator  # noqa: I001
 import dataclasses
 import json
 import os
@@ -10,12 +11,8 @@ from datetime import datetime
 from typing import (
 	TYPE_CHECKING,
 	Any,
-	Dict,
-	Generator,
-	List,
 	Optional,
 	Protocol,
-	Union,
 )
 
 from requests.structures import CaseInsensitiveDict
@@ -32,13 +29,13 @@ from .version import (
 )
 
 if TYPE_CHECKING:
-	from addonHandler import (  # noqa: F401
+	from addonHandler import (  # noqa: I001
 		Addon as AddonHandlerModel,
 		AddonBase as AddonHandlerBaseModel,
 		AddonManifest,
 	)
 
-	AddonGUICollectionT = Dict[Channel, CaseInsensitiveDict["_AddonGUIModel"]]
+	AddonGUICollectionT = dict[Channel, CaseInsensitiveDict["_AddonGUIModel"]]
 	"""
 	Add-ons that have the same ID except differ in casing cause a path collision,
 	as add-on IDs are installed to a case insensitive path.
@@ -46,7 +43,7 @@ if TYPE_CHECKING:
 	"""
 
 
-AddonHandlerModelGeneratorT = Generator["AddonHandlerModel", None, None]
+AddonHandlerModelGeneratorT = Generator["AddonHandlerModel"]
 
 
 class _AddonGUIModel(SupportsAddonState, SupportsVersionCheck, Protocol):
@@ -97,16 +94,20 @@ class _AddonGUIModel(SupportsAddonState, SupportsVersionCheck, Protocol):
 	def listItemVMId(self) -> str:
 		return f"{self.addonId}-{self.channel}"
 
-	def asdict(self) -> Dict[str, Any]:
+	def asdict(self) -> dict[str, Any]:
 		assert dataclasses.is_dataclass(self)
 		jsonData = dataclasses.asdict(self)
-		for field in jsonData:
+		jsonDataCopy = jsonData.copy()
+		for field in jsonDataCopy:
 			# dataclasses.asdict parses NamedTuples to JSON arrays,
 			# rather than JSON object dictionaries,
 			# which is expected by add-on infrastructure.
 			fieldValue = getattr(self, field)
 			if isinstance(fieldValue, MajorMinorPatch):
 				jsonData[field] = fieldValue._asdict()
+			elif isinstance(fieldValue, VirusTotalScanResults):
+				jsonData["vtScanUrl"] = fieldValue.scanUrl
+				jsonData[field] = fieldValue.toDict()
 		return jsonData
 
 
@@ -193,7 +194,7 @@ class _AddonStoreModel(_AddonGUIModel):
 		if self.submissionTime is None:
 			return None
 		# Convert `self.submissionTime` to seconds.
-		return datetime.strftime(datetime.fromtimestamp(self.submissionTime // 1000), "%x")
+		return datetime.strftime(datetime.fromtimestamp(self.submissionTime // 1000), "%x")  # noqa: DTZ006
 
 
 class _AddonManifestModel(_AddonGUIModel):
@@ -204,7 +205,7 @@ class _AddonManifestModel(_AddonGUIModel):
 	addonId: str
 	addonVersionName: str
 	channel: Channel
-	homepage: Optional[str]
+	homepage: str | None
 	minNVDAVersion: MajorMinorPatch
 	lastTestedVersion: MajorMinorPatch
 	manifest: "AddonManifest"
@@ -220,7 +221,7 @@ class _AddonManifestModel(_AddonGUIModel):
 
 	@property
 	def description(self) -> str:
-		description: Optional[str] = self.manifest.get("description")
+		description: str | None = self.manifest.get("description")
 		if description is None:
 			return ""
 		return description
@@ -231,8 +232,12 @@ class _AddonManifestModel(_AddonGUIModel):
 		return changelog
 
 	@property
-	def installDate(self) -> datetime:
-		return datetime.fromtimestamp(os.path.getctime(self.installPath))
+	def installDate(self) -> datetime | None:
+		try:
+			return datetime.fromtimestamp(os.path.getctime(self.installPath))  # noqa: DTZ006
+		except FileNotFoundError:
+			# When add-ons are "pending install", they are not yet at their final path.
+			return None
 
 	@property
 	def author(self) -> str:
@@ -248,7 +253,7 @@ class AddonManifestModel(_AddonManifestModel):
 	addonId: str
 	addonVersionName: str
 	channel: Channel
-	homepage: Optional[str]
+	homepage: str | None
 	minNVDAVersion: MajorMinorPatch
 	lastTestedVersion: MajorMinorPatch
 	manifest: "AddonManifest"
@@ -330,13 +335,13 @@ class AddonStoreModel(_AddonStoreModel):
 @dataclasses.dataclass
 class CachedAddonsModel:
 	cachedAddonData: "AddonGUICollectionT"
-	cacheHash: Optional[str]
+	cacheHash: str | None
 	cachedLanguage: str
 	# AddonApiVersionT or the string .network._LATEST_API_VER
-	nvdaAPIVersion: Union[addonAPIVersion.AddonApiVersionT, str]
+	nvdaAPIVersion: addonAPIVersion.AddonApiVersionT | str
 
 
-def _createInstalledStoreModelFromData(addon: Dict[str, Any]) -> InstalledAddonStoreModel:
+def _createInstalledStoreModelFromData(addon: dict[str, Any]) -> InstalledAddonStoreModel:
 	return InstalledAddonStoreModel(
 		addonId=addon["addonId"],
 		publisher=addon["publisher"],
@@ -358,7 +363,7 @@ def _createInstalledStoreModelFromData(addon: Dict[str, Any]) -> InstalledAddonS
 	)
 
 
-def _createStoreModelFromData(addon: Dict[str, Any]) -> AddonStoreModel:
+def _createStoreModelFromData(addon: dict[str, Any]) -> AddonStoreModel:
 	return AddonStoreModel(
 		addonId=addon["addonId"],
 		displayName=addon["displayName"],
@@ -384,7 +389,7 @@ def _createStoreModelFromData(addon: Dict[str, Any]) -> AddonStoreModel:
 
 
 def _createGUIModelFromManifest(addon: "AddonHandlerBaseModel") -> AddonManifestModel:
-	homepage: Optional[str] = addon.manifest.get("url")
+	homepage: str | None = addon.manifest.get("url")
 	if homepage == "None":
 		# Manifest strings can be set to "None"
 		homepage = None
@@ -413,7 +418,7 @@ def _createStoreCollectionFromJson(jsonData: str) -> "AddonGUICollectionT":
 	See https://github.com/nvaccess/addon-datastore#api-data-generation-details
 	for details of the data.
 	"""
-	data: List[Dict[str, Any]] = json.loads(jsonData)
+	data: list[dict[str, Any]] = json.loads(jsonData)
 	addonCollection = _createAddonGUICollection()
 
 	for addon in data:

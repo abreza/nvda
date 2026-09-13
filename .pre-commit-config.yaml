@@ -9,9 +9,11 @@ ci:
   # https://stackoverflow.com/questions/70778806/pre-commit-not-using-virtual-environment .
   # Can't run licenseCheck as it relies on telemetry,
   # which CI blocks.
-  # Pyright does not seem to work in pre-commit CI
-  skip: [checkPo, scons-source, checkPot, unitTest, licenseCheck, pyright]
-  autoupdate_schedule: monthly
+  # Pyright and ty do not seem to work in pre-commit CI,
+  # as they need our python environment ([tool.ty.environment] points at .venv).
+  skip: [checkPo, scons-source, checkPot, unitTest, licenseCheck, pyright, ty]
+  autofix_prs: false
+  autoupdate_schedule: quarterly
   autoupdate_commit_msg: "Pre-commit auto-update"
   autofix_commit_msg: "Pre-commit auto-fix"
   submodules: true
@@ -41,9 +43,10 @@ repos:
     # Checks that large files have not been added. Default cut-off for "large" files is 500kb.
     - id: check-added-large-files
       # POFiles and TTF fonts can't be made smaller
+      # XLIFF files can be moved here from exclude when pre-commit/identify#558 is released.
       exclude_types: ["pofile", "ttf"]
-      # Same applies for NVDA dictionary (.dic) files and Spline Font Database (.SFD) files, but these aren't recognised by the Identify library.
-      exclude: "\\.(dic|sfd)$"
+      # Same applies for XLIFF, NVDA dictionary (.dic) files and Spline Font Database (.SFD) files, but these aren't recognised by the Identify library.
+      exclude: "\\.(dic|sfd|xliff)$"
     # Checks python syntax
     - id: check-ast
     # Checks for filenames that will conflict on case insensitive filesystems (the majority of Windows filesystems, most of the time)
@@ -54,13 +57,16 @@ repos:
     - id: debug-statements
     # Removes trailing whitespace.
     - id: trailing-whitespace
+      groups: [autofix]
       types_or: [python, c, c++, batch, markdown, toml, yaml, powershell]
     # Ensures all files end in 1 (and only 1) newline.
     - id: end-of-file-fixer
+      groups: [autofix]
       types_or: [python, c, c++, batch, markdown, toml, yaml, powershell]
     # Removes the UTF-8 BOM from files that have it.
     # See https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/codingStandards.md#encoding
     - id: fix-byte-order-marker
+      groups: [autofix]
       types_or: [python, c, c++, batch, markdown, toml, yaml, powershell]
     # Validates TOML files.
     - id: check-toml
@@ -91,6 +97,12 @@ repos:
           )
         )
 
+- repo: https://github.com/kjanat/actionlint
+  rev: v1.12.0
+  hooks:
+    # Lint GitHub Actions workflow files.
+    - id: actionlint
+
 - repo: https://github.com/asottile/add-trailing-comma
   rev: v4.0.0
   hooks:
@@ -98,31 +110,53 @@ repos:
   # if a trailing comma is added.
   # This adds a trailing comma to args/iterable items in case it was missed.
   - id: add-trailing-comma
+    groups: [autofix]
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Matches Ruff version in pyproject.
-  rev: v0.14.5
+  rev: v0.16.3
   hooks:
     - id: ruff
       name: lint with ruff
+      groups: [autofix]
       args: [ --fix ]
     - id: ruff-format
       name: format with ruff
+      groups: [autofix]
 
 - repo: https://github.com/astral-sh/uv-pre-commit
-  rev: 0.9.11
+  rev: 0.12.5
   hooks:
     - id: uv-lock
       name: Verify uv lock file
+      groups: [autofix]
       # Override python interpreter from .python-versions as that is too strict for pre-commit.ci
       args: ["-p3.13"]
+    - id: uv-lock
+      name: Verify uv lock file (synthDriverHost32)
+      groups: [autofix]
+      files: ^runtime-builders/synthDriverHost32/
+      args: ["--project", "runtime-builders/synthDriverHost32", "-p3.13"]
 
 - repo: https://github.com/DavidAnson/markdownlint-cli2
-  rev: v0.18.1
+  rev: v0.23.2
   hooks:
   - id: markdownlint-cli2
     name: Lint markdown files
+    groups: [autofix]
     args: ["--fix"]
+
+- repo: https://github.com/astral-sh/ty-pre-commit
+  # Matches ty version in pyproject.
+  rev: v0.0.73
+  hooks:
+    - id: ty
+      name: type check with ty
+      # The upstream hook sets always_run, making every commit
+      # (even ones without python changes) pay for a full ty check.
+      always_run: false
+      types: [python]
+      exclude: "(sconscript|sconstruct)$"
 
 - repo: local
   hooks:
@@ -139,11 +173,12 @@ repos:
       types_or: [c, c++]
     - id: checkPot
       name: translation string check
-      entry: cmd.exe /c "scons checkPot --all-cores"
-      language: system
+      entry: ./runcheckpot.bat --all-cores
+      language: script
       pass_filenames: false
       types: [python]
       files: ^source/.*$
+      exclude: "(sconscript|sconstruct)$"
     - id: unitTest
       name: unit tests
       entry: ./rununittests.bat
@@ -161,3 +196,4 @@ repos:
       entry: uv run pyright
       language: system
       types: [python]
+      exclude: "(sconscript|sconstruct)$"

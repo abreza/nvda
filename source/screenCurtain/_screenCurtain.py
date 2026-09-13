@@ -168,7 +168,7 @@ class ScreenCurtain:
 			try:
 				self.enable()
 			except RuntimeError:
-				log.error("Failed to enable Screen Curtain", exc_info=True)
+				log.error("Failed to enable Screen Curtain", exc_info=True)  # noqa: G201
 				if _TrackNVDAInitialization.isInitializationComplete():
 					self._postInitialisationActivationFailureMessage()
 				else:
@@ -199,6 +199,14 @@ class ScreenCurtain:
 		if self._enabled:
 			log.debug("ScreenCurtain is already enabled.")
 			return
+
+		# Notify magnifier that screen curtain is being enabled
+		import _magnifier
+
+		magnifierInstance = _magnifier.getMagnifier()
+		if magnifierInstance:
+			magnifierInstance.onScreenCurtainEnabled()
+
 		log.debug("Enabling ScreenCurtain")
 		for attempt in range(self._MAX_ENABLE_RETRIES):
 			exception: Exception | None = None
@@ -209,7 +217,7 @@ class ScreenCurtain:
 				if not isScreenFullyBlack():
 					raise RuntimeError("Screen is not black.")
 				break
-			except Exception as e:
+			except Exception as e:  # noqa: BLE001
 				# We must call MagUninitialize at least as many times as we call MagInitialize,
 				# as if we don't, we are liable to get permission errors
 				# when attempting to use the magnification API
@@ -250,6 +258,13 @@ class ScreenCurtain:
 				nvwave.playWaveFile(os.path.join(globalVars.appDir, "waves", "screenCurtainOff.wav"))
 			except Exception:
 				log.exception()
+		# Notify magnifier that screen curtain is being disabled
+
+		import _magnifier
+
+		magnifierInstance = _magnifier.getMagnifier()
+		if magnifierInstance:
+			magnifierInstance.onScreenCurtainDisabled()
 
 	def __del__(self) -> None:
 		"""Custom deleter that disables the Screen Curtain if necessary when this object is garbage collected."""
