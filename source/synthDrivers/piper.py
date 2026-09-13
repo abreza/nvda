@@ -1,9 +1,9 @@
 import os
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
 
-from autoSettingsUtils.driverSetting import NumericDriverSetting, BooleanDriverSetting
+from autoSettingsUtils.driverSetting import BooleanDriverSetting
 from autoSettingsUtils.utils import StringParameterInfo
 from logHandler import log
 from speech.commands import (
@@ -67,9 +67,9 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		self._voiceDir = Path(os.environ.get("PIPER_VOICE_DIR", DEFAULT_VOICE_DIR))
 		self._ezafeModelPath = os.environ.get("PIPER_EZAFE_MODEL_PATH")
 
-		self._voiceData: Dict[str, Dict[str, Any]] = {}
-		self._loadedVoices: Dict[str, Any] = {}
-		self._currentVoice: Optional[Any] = None
+		self._voiceData: dict[str, dict[str, Any]] = {}
+		self._loadedVoices: dict[str, Any] = {}
+		self._currentVoice: Any | None = None
 		self._currentVoiceId: str = ""
 
 		self._rate = 50
@@ -78,7 +78,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		self._variant = "0"
 		self._usePersianPhonemizer = True
 
-		self._bgThread: Optional[BgThread] = None
+		self._bgThread: BgThread | None = None
 
 		self._scanVoices()
 
@@ -144,7 +144,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 
 		log.info(f"Found {len(self._voiceData)} Piper voice(s)")
 
-	def _loadVoice(self, voice_id: str) -> Optional[Any]:
+	def _loadVoice(self, voice_id: str) -> Any | None:
 		if voice_id in self._loadedVoices:
 			return self._loadedVoices[voice_id]
 
@@ -324,7 +324,7 @@ class SynthDriver(synthDriverHandler.SynthDriver):
 		# Could implement by stopping/restarting
 		pass
 
-	def _get_language(self) -> Optional[str]:
+	def _get_language(self) -> str | None:
 		if self._currentVoiceId:
 			voice_info = self._voiceData.get(self._currentVoiceId, {})
 			return voice_info.get("language")

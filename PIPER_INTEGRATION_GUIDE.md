@@ -13,8 +13,6 @@
 Download and install Python 3.13.x (64-bit) from [python.org](https://www.python.org/downloads/).
 
 During installation:
-- ✅ Add Python to PATH
-- ✅ Install pip
 
 ### 1.2 Install uv (Package Manager)
 
@@ -25,26 +23,30 @@ irm https://astral.sh/uv/install.ps1 | iex
 ```
 
 Or with pip:
-```powershell
-pip install uv
+
+
+
+
 ```
 
 ### 1.3 Install Visual Studio 2022
 
-Download [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) or [Community Edition](https://aka.ms/vs/17/release/vs_Community.exe).
+*ownload [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) or [Community Edition](https://aka.ms/vs/17/release/vs_Community.exe).
+**
+*u*ing installation, select:
 
-During installation, select:
-- **Desktop development with C++**
-  - Include "C++ Clang tools for Windows"
-- Individual Components:
-  - Windows 11 SDK (10.0.26100.x)
-  - MSVC v143 - VS 2022 C++ ARM64/ARM64EC build tools
-  - MSVC v143 - VS 2022 C++ x64/x86 build tools
-  - C++ ATL for v143 build tools (x86 & x64)
-  - C++ ATL for v143 build tools (ARM64/ARM64EC)
+* **Desktop development with C++**
+
+* * Include "C++ Clang tools for Windows"
+* *ndividual Components:
+  * Windows 11 SDK (10.0.26100.x)
+  * MSVC v143 - VS 2022 C++ ARM64/ARM64EC build tools
+  * MSVC v143 - VS 2022 C++ x64/x86 build tools
+  * C++ ATL for v143 build tools (x86 & x64)
+
+  * C++ ATL for v143 build tools (ARM64/ARM64EC)
 
 **Quick method:** Import the `.vsconfig` file from the NVDA repository:
-```powershell
 vs_installer.exe --config "C:\path\to\nvda-master\.vsconfig"
 ```
 
@@ -76,23 +78,31 @@ Open a **Developer Command Prompt for VS 2022** (or regular PowerShell) and navi
 ```powershell
 cd C:\path\to\nvda-master
 
+
 # Build NVDA (this creates the virtual environment and builds everything)
+
 .\scons.bat
 ```
 
 This will:
+
 1. Create a Python virtual environment
-2. Install all dependencies via uv
-3. Build nvdaHelper (C++ components)
-4. Compile all resources
+2. Build nvdaHelper (C++ components)
+
+3. Compile all resources
 
 ### 3.2 Run NVDA from Source
 
 ```powershell
 .\runnvda.bat
+
 ```
 
+
+
+
 Or with debug options:
+
 ```powershell
 .\runnvda.bat --debug-logging
 ```
@@ -220,17 +230,17 @@ pip install --force-reinstall C:\path\to\piper_tts-*.whl
 Ensure the Ezafe model is properly installed:
 
 ```powershell
+
 # Download and extract the Ezafe model
-# Set the environment variable
 $env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
 ```
 
 ### Issue: No voices found
 
 Check that:
+
 1. Voice files are in the correct directory
 2. Both `.onnx` and `.onnx.json` files exist
-3. `PIPER_VOICE_DIR` environment variable is set correctly
 
 ### Issue: Build errors
 
@@ -274,21 +284,19 @@ cd C:\path\to\nvda-master
 
 # 2. Install Piper
 .\.venv\Scripts\Activate.ps1
-pip install C:\path\to\piper_tts-*.whl
-pip install hazm pandas pyarrow transformers optimum[onnxruntime]
-
+*ip install C:\path\to\piper_tts-*.whl
+*ip install hazm pandas pyarrow transformers optimum[onnxruntime]
+*
 # 3. Set environment variables
 $env:PIPER_VOICE_DIR = "C:\path\to\nvda-master\source\synthDrivers\piper_voices"
-$env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
-
-# 4. Run NVDA
+*env:PIPER_EZAFE_MODEL_PATH = "C:\path\to\ezafe_model_quantized"
+*
+* 4. Run NVDA
 .\runnvda.bat
 ```
 
----
+*
 
-## Additional Resources
-
-- [NVDA Developer Guide](https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/createDevEnvironment.md)
-- [Piper TTS Documentation](https://github.com/rhasspy/piper)
-- [NVDA Add-on Development](https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/addonDevelopment.md)
+*--
+*
+* [NVDA Add-on Development](https://github.com/nvaccess/nvda/blob/master/projectDocs/dev/addonDevelopment.md)

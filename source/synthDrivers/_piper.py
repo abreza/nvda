@@ -1,6 +1,6 @@
 import threading
 import queue
-from typing import Optional, Dict, Any
+from typing import Any
 
 import nvwave
 from logHandler import log
@@ -8,6 +8,7 @@ from synthDriverHandler import synthIndexReached, synthDoneSpeaking
 
 try:
 	from piper.config import SynthesisConfig
+
 	PIPER_AVAILABLE = True
 except ImportError:
 	SynthesisConfig = None
@@ -25,13 +26,14 @@ def loadVoice(
 	config_path: str,
 	use_cuda: bool = False,
 	use_persian_phonemizer: bool = False,
-	ezafe_model_path: Optional[str] = None,
-) -> Optional[Any]:
+	ezafe_model_path: str | None = None,
+) -> Any | None:
 	if not PIPER_AVAILABLE:
 		log.error("Cannot load voice: Piper TTS package not available")
 		return None
 	try:
 		from piper import PiperVoice
+
 		voice = PiperVoice.load(
 			model_path=model_path,
 			config_path=config_path,
@@ -52,8 +54,8 @@ class BgThread(threading.Thread):
 		self._queue: queue.Queue = queue.Queue()
 		self._running = True
 		self._cancelled = False
-		self._player: Optional[nvwave.WavePlayer] = None
-		self._playerSampleRate: Optional[int] = None
+		self._player: nvwave.WavePlayer | None = None
+		self._playerSampleRate: int | None = None
 		self._playerLock = threading.Lock()
 
 	def run(self):
@@ -82,7 +84,7 @@ class BgThread(threading.Thread):
 			elif cmd == "index":
 				synthIndexReached.notify(synth=self._synth, index=data)
 
-	def _speak(self, data: Dict[str, Any]):
+	def _speak(self, data: dict[str, Any]):
 		text = data.get("text", "")
 		if not text.strip():
 			return
@@ -107,7 +109,11 @@ class BgThread(threading.Thread):
 		)
 
 		try:
-			for audio_chunk in voice.synthesize(text, syn_config, cancelled_callback=lambda: (not self._running) or self._cancelled):
+			for audio_chunk in voice.synthesize(
+				text,
+				syn_config,
+				cancelled_callback=lambda: (not self._running) or self._cancelled,
+			):
 				if not self._running or self._cancelled:
 					break
 
