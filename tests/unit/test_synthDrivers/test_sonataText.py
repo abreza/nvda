@@ -10,6 +10,16 @@ from synthDrivers._sonata.text import languageRuns
 
 
 class TestSonataText(unittest.TestCase):
+	def test_reportedPersianWordAndVowelMarksReachTheSameLanguageRun(self) -> None:
+		for text in ("دستیار", "دَستیار", "دَستْیار", "دستيار"):
+			with self.subTest(text=text):
+				self.assertEqual([(text, "fa")], list(languageRuns(text)))
+
+	def test_isolatedPersianLettersAreNotDiscarded(self) -> None:
+		for character in "آابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی":
+			with self.subTest(character=character):
+				self.assertEqual([(character, "fa")], list(languageRuns(character)))
+
 	def test_scriptChangesPreserveJoinersDiacriticsAndNeutralCharacters(self) -> None:
 		text = "۱۲۳، می‌روم به OpenAI's site؛ برمی‌گردم."
 		runs = list(languageRuns(text))

@@ -61,6 +61,7 @@ def loadPiperVoice(
 	configPath: Path,
 	*,
 	persianPhonemizer: bool = False,
+	shortSpeechRepeat: bool = False,
 	ezafeModel: str | None = None,
 	homographDictionary: str | None = None,
 ) -> Voice:
@@ -82,12 +83,14 @@ def loadPiperVoice(
 	from piper import PiperVoice
 	from piper.config import SynthesisConfig
 
+	loadOptions = {"use_short_speech_repeat": True} if shortSpeechRepeat else {}
 	piperVoice = PiperVoice.load(
 		model_path=str(modelPath),
 		config_path=str(configPath),
 		use_cuda=False,
 		use_persian_phonemizer=persianPhonemizer,
 		ezafe_model_path=ezafeModel,
+		**loadOptions,
 	)
 	config = piperVoice.config
 	if not 8000 <= config.sample_rate <= 192000:

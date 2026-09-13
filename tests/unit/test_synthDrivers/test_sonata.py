@@ -11,14 +11,18 @@ from threading import Event, Thread
 from types import SimpleNamespace
 from unittest import mock
 
+from speech import speech as nvdaSpeech
 from speech.commands import (
 	BreakCommand,
+	CharacterModeCommand,
+	EndUtteranceCommand,
 	IndexCommand,
 	LangChangeCommand,
 	PitchCommand,
 	RateCommand,
 	VolumeCommand,
 )
+from speech.manager import SpeechManager
 from synthDrivers import sonata
 from synthDrivers._sonata import worker as speechWorker
 from synthDrivers._sonata.client import Voice
@@ -397,6 +401,77 @@ class TestSonataDriver(unittest.TestCase):
 		driver.rateBoost = False
 		self.assertEqual([50, 70, 50], [item.pitch for item in items])
 		self.assertTrue(all(item.rateBoost for item in items))
+
+	def test_reportedPersianWordReachesWorkerWithoutTextChanges(self) -> None:
+		for detectLanguage in (False, True):
+			for text in ("دستیار", "دَستیار", "دَستْیار", "دستيار"):
+				with self.subTest(detectLanguage=detectLanguage, text=text):
+					driver = self._multilingualDriver()
+					driver.detectLanguage = detectLanguage
+					driver.speak([LangChangeCommand("fa_IR"), text, IndexCommand(1)])
+					items = driver._worker.speak.call_args.args[0]
+					self.assertEqual(
+						[text], [item.text for item in items if isinstance(item, speechWorker.Speech)]
+					)
+					self.assertEqual("default", items[0].voice.id)
+					self.assertEqual(speechWorker.Index(1), items[1])
+
+	def test_nvdasPersianSpellingPreservesEveryLetterAndUtteranceBoundary(self) -> None:
+		"""Trace real NVDA spelling and queue preparation, without testing TTS pronunciation.
+
+		The service receives single letters, including when NVDA requests character mode.
+		Their names, phonemes and audible duration must be checked against the real service.
+		"""
+		driver = self._driverState()
+		manager = SpeechManager()
+		self.addCleanup(speechWorker.synthIndexReached.unregister, manager._onSynthIndexReached)
+		self.addCleanup(speechWorker.synthDoneSpeaking.unregister, manager._onSynthDoneSpeaking)
+		speechConfig = dict(sonata.config.conf["speech"].items())
+		speechConfig.update(
+			{
+				"autoLanguageSwitching": True,
+				"autoDialectSwitching": True,
+				"unicodeNormalization": False,
+				"reportNormalizedForCharacterNavigation": False,
+				"sonata": {
+					"capPitchChange": 0,
+					"sayCapForCapitals": False,
+					"beepForCapitals": False,
+					"useSpellingFunctionality": True,
+				},
+			},
+		)
+		with (
+			mock.patch.object(sonata.config, "conf", {"speech": speechConfig}),
+			mock.patch.object(nvdaSpeech, "getSynth", return_value=driver),
+			mock.patch.object(nvdaSpeech, "getCurrentLanguage", return_value="fa_IR"),
+		):
+			# A single character is the normal typing echo case; a word uses spelling navigation.
+			for text in ("دستیار", *"آابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی"):
+				for useCharMode in (False, True):
+					with self.subTest(text=text, useCharMode=useCharMode):
+						driver._worker.reset_mock()
+						sequence = list(
+							nvdaSpeech.getSpellingSpeech(text, locale="fa_IR", useCharMode=useCharMode)
+						)
+						self.assertEqual(
+							[True, False] if useCharMode else [],
+							[item.state for item in sequence if isinstance(item, CharacterModeCommand)],
+						)
+						utterances = manager._processSpeechSequence(sequence)
+						for utterance in utterances:
+							if not isinstance(utterance[0], EndUtteranceCommand):
+								driver.speak(utterance)
+						items = [
+							item for call in driver._worker.speak.call_args_list for item in call.args[0]
+						]
+						self.assertEqual(
+							list(text),
+							[item.text for item in items if isinstance(item, speechWorker.Speech)],
+						)
+						for index, item in enumerate(items):
+							if isinstance(item, speechWorker.Speech):
+								self.assertIsInstance(items[index + 1], speechWorker.Index)
 
 	def test_languageCommandsRestoreDefaultVoiceAndPreserveProgress(self) -> None:
 		driver = self._multilingualDriver()

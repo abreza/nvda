@@ -276,6 +276,11 @@ def main(argv: list[str] | None = None) -> None:
 	)
 	parser.add_argument("--ezafe-model", help="Local Ezafe model directory")
 	parser.add_argument("--homograph-dictionary", help="Local Persian homograph dictionary file")
+	parser.add_argument(
+		"--short-speech-repeat",
+		action="store_true",
+		help="Enable Piper's experimental short Persian repetition and first-copy extraction; requires a prepared model",
+	)
 	args = parser.parse_args(argv)
 	if not 1 <= args.port <= 65535:
 		parser.error("--port must be between 1 and 65535")
@@ -286,6 +291,7 @@ def main(argv: list[str] | None = None) -> None:
 		voices = configuredVoices(
 			args.voice,
 			persianPhonemizer=args.persian_phonemizer,
+			shortSpeechRepeat=args.short_speech_repeat,
 			ezafeModel=args.ezafe_model,
 			homographDictionary=args.homograph_dictionary,
 		)

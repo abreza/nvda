@@ -44,6 +44,38 @@ the model/tokenizer files must already exist locally. These dependencies and dat
 belong to the service environment. The service does not download voices or install
 packages on behalf of a client.
 
+### Experimental Mana short speech
+
+The updated custom Piper wheel provides an opt-in workaround for isolated Persian
+words: it generates internal repetitions and returns only the first copy, cropped
+using the model's predicted durations. All repetition, cropping, and audio
+processing live in Piper; this service only enables its option.
+
+After rebuilding the custom wheel, replace the older version in the service
+environment with `python -m pip install --force-reinstall --no-deps
+C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl`.
+
+First prepare a separate model with `python -m piper.prepare_short_speech --voice
+C:\Piper\voices\fa_IR-mana-medium.onnx --output
+C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx`. Preparation requires `onnx`
+(the custom wheel's `alignment` extra). Then start the updated wheel with:
+
+```powershell
+.\.venv\Scripts\python.exe -m sonata_piper `
+    --voice C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx `
+    --short-speech-repeat `
+    --persian-phonemizer `
+    --ezafe-model C:\Piper\ezafe_model_quantized `
+    --homograph-dictionary C:\Piper\train-01.parquet
+```
+
+This remains disabled by default. Listening confirmed that extracting `دستیار`
+from a repetition improves that word; some isolated letters still fail. It is an
+experimental workaround, adds inference work, and does not establish correct
+pronunciation for all short input. The original voice file is preserved. NVDA
+continues sending ordinary text; no driver-side repetition is needed. A wheel
+without this new option can still be used when the service flag is omitted.
+
 ## RPC contract
 
 The checked-in messages are generated from
@@ -99,9 +131,68 @@ With the service package installed, run from this directory:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-These tests use a real loopback gRPC server and a deterministic fake synthesis
+The default tests use a real loopback gRPC server and a deterministic fake synthesis
 engine. They cover the wire contract, session isolation, cancellation, bounded PCM,
 input limits, and errors without requiring a voice model. Real inference and
 Persian pronunciation also require a runtime check with the local wheel and assets.
+
+The opt-in `tests/test_mana.py` checks the real engine and gRPC transport for
+`دستیار` and its individual letters. Set `SONATA_TEST_VOICE` to the local model,
+`SONATA_TEST_EZAFE_MODEL` to the Ezafe directory, and
+`SONATA_TEST_HOMOGRAPH_DICTIONARY` to the parquet file, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_mana.py -v
+```
+
+It compares the engine's PCM with the received PCM byte for byte and prints time
+to first audio. Without all three variables, this test is skipped.
+To exercise the experimental engine option, select the prepared model and also
+set `SONATA_TEST_SHORT_SPEECH_REPEAT=1`.
+
+To compare the standard eSpeak frontend with the enhanced Persian frontend using
+the same local voice, run this opt-in diagnostic in the service environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m sonata_piper.diagnose `
+    --voice C:\Piper\voices\fa_IR-mana-medium.onnx `
+    --ezafe-model C:\Piper\ezafe_model_quantized `
+    --homograph-dictionary C:\Piper\train-01.parquet `
+    --output C:\Piper\diagnostics\mana
+```
+
+It writes a WAV per input/frontend and `report.json`. Default inputs include
+`دستیار`, the word with a period, a sentence containing it, its individual letters,
+expanded letter names, and two explicit IPA candidates. The candidates are listening
+comparisons, not verified pronunciation targets. Repeat `--text` to replace the
+default cases, for example `--text "س" --text "س."`; use `--hash-assets` to record
+the voice/configuration SHA256 hashes.
+With the updated wheel and a prepared model, add `--short-speech-repeat`
+to diagnose the experimental path and record that choice in the report.
+
+The report captures the phoneme chunks and IDs actually used by synthesis, missing
+symbols, warnings (including fallback warnings), loaded module paths and versions,
+frontend/inference timing, time to first PCM, audio duration, peak/RMS, and nonzero
+sample counts. Leading/trailing samples below 1% of PCM full scale are also measured;
+that threshold is an activity indicator, not a speech recognition result. The
+command loads one voice and its Persian resources, then switches its frontend flag
+for the two modes. Model loading is timed separately; the first case in each mode
+may include lazy initialization costs.
+The voice's default inference settings are retained; stochastic synthesis can vary
+between runs even when the phonemes are identical.
+
+`raw_inference_audio` records peak/RMS before Piper's automatic peak normalization.
+`acoustics` measures the fraction of active-frame energy above 4 kHz, and
+`acoustic_flags` reports `high_frequency_dominant` when its median exceeds 90%.
+This can expose quiet high-frequency artifacts that normalization amplifies into
+loud hiss. It is a heuristic: a high-frequency sound can also be intentional.
+`acoustic_flags_detected` summarizes these flags independently of structural
+`automated_checks_passed` and the exit status.
+
+The command exits with status 1 for exceptions, missing phoneme symbols, or empty or
+all-zero audio. Passing these checks does **not** establish correct pronunciation:
+listen to the WAVs and compare their phonemes. It exercises the service backend;
+NVDA's character announcements, cancellation, gRPC transport, and playback require
+separate tests. It uses the same offline Persian resource loading as the service.
 
 See the [NVDA setup guide](../../SONATA_SERVICE_GUIDE.md) for configuring the client.
