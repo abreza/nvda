@@ -8,8 +8,8 @@ Set SONATA_TEST_VOICE to the local Mana .onnx or .onnx.json file,
 SONATA_TEST_EZAFE_MODEL to the local Ezafe model directory, and
 SONATA_TEST_HOMOGRAPH_DICTIONARY to the local parquet dictionary before running
 ``python -m unittest discover -s tests -p test_mana.py -v``.
-For the experimental engine path, use a prepared voice and also set
-SONATA_TEST_SHORT_SPEECH_REPEAT=1.
+Repetition is enabled by default and requires a prepared voice. Set
+SONATA_TEST_SHORT_SPEECH_REPEAT=0 to use an original model with ordinary synthesis.
 
 These checks locate lost text, silence, or altered PCM at the service boundary.
 They do not judge pronunciation or simulate NVDA playback and typing cancellation.
@@ -57,7 +57,7 @@ class ManaIntegrationTests(unittest.TestCase):
 			modelPath,
 			configPath,
 			persianPhonemizer=True,
-			shortSpeechRepeat=os.environ.get("SONATA_TEST_SHORT_SPEECH_REPEAT") == "1",
+			shortSpeechRepeat=os.environ.get("SONATA_TEST_SHORT_SPEECH_REPEAT", "1") == "1",
 			ezafeModel=os.environ["SONATA_TEST_EZAFE_MODEL"],
 			homographDictionary=os.environ["SONATA_TEST_HOMOGRAPH_DICTIONARY"],
 		)

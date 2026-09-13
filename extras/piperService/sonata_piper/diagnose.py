@@ -276,8 +276,9 @@ def main(argv: list[str] | None = None) -> int:
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument(
 		"--short-speech-repeat",
-		action="store_true",
-		help="Enable Piper's experimental short speech option; requires a prepared model and updated wheel",
+		action=argparse.BooleanOptionalAction,
+		default=True,
+		help="Repeat short Persian input (default: enabled); requires a prepared model and updated wheel",
 	)
 	parser.add_argument("--voice", required=True, help="Local .onnx or .onnx.json voice")
 	parser.add_argument("--ezafe-model", required=True, help="Local Ezafe model directory")

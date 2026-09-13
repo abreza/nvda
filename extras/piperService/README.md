@@ -8,16 +8,20 @@ implementation of Sonata's RPC interface; it does not run Sonata's Rust engine.
 ## Install and run
 
 The initial backend requires the project's custom Windows x64 Piper 1.3.1 wheel.
-Its `PiperVoice` API adds `use_persian_phonemizer`, `ezafe_model_path`, and
-`cancelled_callback`. A stock PyPI Piper wheel is not a compatible replacement.
+Its `PiperVoice` API adds `use_persian_phonemizer`, `ezafe_model_path`,
+`use_short_speech_repeat`, and `cancelled_callback`. A stock PyPI Piper wheel is not
+a compatible replacement.
 Keep the wheel and voice assets outside the NVDA source checkout. With Python 3.13
 installed, run these commands from `extras/piperService`:
 
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
-.\.venv\Scripts\python.exe -m pip install C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl
-.\.venv\Scripts\python.exe -m sonata_piper --voice C:\Piper\voices\fa_IR-mana-medium.onnx
+.\.venv\Scripts\python.exe -m pip install "C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl[alignment]"
+.\.venv\Scripts\python.exe -m piper.prepare_short_speech `
+    --voice C:\Piper\voices\fa_IR-mana-medium.onnx `
+    --output C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx
+.\.venv\Scripts\python.exe -m sonata_piper --voice C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx
 ```
 
 The matching `.onnx.json` must sit beside the `.onnx` file. Repeat `--voice` to
@@ -26,13 +30,19 @@ loads configured models once before accepting connections and keeps them residen
 Start it independently of NVDA and leave the process running while clients use it.
 Stop with Control+C.
 
+This NVDA service enables short Persian word repetition by default and requires a
+prepared model. Standalone Piper keeps repetition disabled by default.
+Preparation creates a separate model/configuration pair and preserves the original;
+run it once for each output path. To use the original model with ordinary synthesis,
+pass `--no-short-speech-repeat` to the service.
+
 To enable the custom Persian phonemizer, install its extra dependencies and provide
 the local Ezafe model and homograph dictionary explicitly:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install ".[persian]"
 .\.venv\Scripts\python.exe -m sonata_piper `
-    --voice C:\Piper\voices\fa_IR-mana-medium.onnx `
+    --voice C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx `
     --persian-phonemizer `
     --ezafe-model C:\Piper\ezafe_model_quantized `
     --homograph-dictionary C:\Piper\train-01.parquet
@@ -46,35 +56,33 @@ packages on behalf of a client.
 
 ### Experimental Mana short speech
 
-The updated custom Piper wheel provides an opt-in workaround for isolated Persian
-words: it generates internal repetitions and returns only the first copy, cropped
+The updated custom Piper wheel provides a workaround for isolated Persian words:
+it generates internal repetitions and returns only the first copy, cropped
 using the model's predicted durations. All repetition, cropping, and audio
-processing live in Piper; this service only enables its option.
+processing live in Piper; this service enables its option by default.
 
 After rebuilding the custom wheel, replace the older version in the service
 environment with `python -m pip install --force-reinstall --no-deps
 C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl`.
 
-First prepare a separate model with `python -m piper.prepare_short_speech --voice
-C:\Piper\voices\fa_IR-mana-medium.onnx --output
-C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx`. Preparation requires `onnx`
-(the custom wheel's `alignment` extra). Then start the updated wheel with:
+Prepare a separate model using the install commands above. Preparation requires
+`onnx` (the custom wheel's `alignment` extra). Then start the updated wheel with:
 
 ```powershell
 .\.venv\Scripts\python.exe -m sonata_piper `
     --voice C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx `
-    --short-speech-repeat `
     --persian-phonemizer `
     --ezafe-model C:\Piper\ezafe_model_quantized `
     --homograph-dictionary C:\Piper\train-01.parquet
 ```
 
-This remains disabled by default. Listening confirmed that extracting `دستیار`
+Use `--no-short-speech-repeat` to disable the workaround; `--short-speech-repeat`
+explicitly enables it. Listening confirmed that extracting `دستیار`
 from a repetition improves that word; some isolated letters still fail. It is an
 experimental workaround, adds inference work, and does not establish correct
 pronunciation for all short input. The original voice file is preserved. NVDA
-continues sending ordinary text; no driver-side repetition is needed. A wheel
-without this new option can still be used when the service flag is omitted.
+continues sending ordinary text; no driver-side repetition is needed. An older custom
+wheel without the repetition option can be used with `--no-short-speech-repeat`.
 
 ## RPC contract
 
@@ -147,15 +155,15 @@ The opt-in `tests/test_mana.py` checks the real engine and gRPC transport for
 
 It compares the engine's PCM with the received PCM byte for byte and prints time
 to first audio. Without all three variables, this test is skipped.
-To exercise the experimental engine option, select the prepared model and also
-set `SONATA_TEST_SHORT_SPEECH_REPEAT=1`.
+Repetition is enabled by default, so select the prepared model. Set
+`SONATA_TEST_SHORT_SPEECH_REPEAT=0` to use an original model with ordinary synthesis.
 
 To compare the standard eSpeak frontend with the enhanced Persian frontend using
 the same local voice, run this opt-in diagnostic in the service environment:
 
 ```powershell
 .\.venv\Scripts\python.exe -m sonata_piper.diagnose `
-    --voice C:\Piper\voices\fa_IR-mana-medium.onnx `
+    --voice C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx `
     --ezafe-model C:\Piper\ezafe_model_quantized `
     --homograph-dictionary C:\Piper\train-01.parquet `
     --output C:\Piper\diagnostics\mana
@@ -167,8 +175,8 @@ expanded letter names, and two explicit IPA candidates. The candidates are liste
 comparisons, not verified pronunciation targets. Repeat `--text` to replace the
 default cases, for example `--text "س" --text "س."`; use `--hash-assets` to record
 the voice/configuration SHA256 hashes.
-With the updated wheel and a prepared model, add `--short-speech-repeat`
-to diagnose the experimental path and record that choice in the report.
+The diagnostic enables repetition by default and records that choice in the report.
+Pass `--no-short-speech-repeat` to compare ordinary synthesis or use an original model.
 
 The report captures the phoneme chunks and IDs actually used by synthesis, missing
 symbols, warnings (including fallback warnings), loaded module paths and versions,

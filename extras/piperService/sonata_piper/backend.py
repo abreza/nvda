@@ -61,7 +61,7 @@ def loadPiperVoice(
 	configPath: Path,
 	*,
 	persianPhonemizer: bool = False,
-	shortSpeechRepeat: bool = False,
+	shortSpeechRepeat: bool = True,
 	ezafeModel: str | None = None,
 	homographDictionary: str | None = None,
 ) -> Voice:

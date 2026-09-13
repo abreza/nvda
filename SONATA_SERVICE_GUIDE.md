@@ -17,28 +17,37 @@ repository at the stated path:
 
 ```powershell
 py -3.13 -m venv extras/piperService/.venv
-.\extras\piperService\.venv\Scripts\python.exe -m pip install './extras/piperService[persian]' 'C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl'
+.\extras\piperService\.venv\Scripts\python.exe -m pip install './extras/piperService[persian]' 'C:\Piper\piper_tts-1.3.1-cp39-abi3-win_amd64.whl[alignment]'
 ```
 
 Replace the wheel argument with its local path if stored elsewhere. A stock Piper
 wheel does not provide the custom Persian phonemizer and cancellation extensions.
-The `[persian]` extra installs the additional Persian dependencies. For voices that
-do not use that phonemizer, install `./extras/piperService` without the extra.
+The `[persian]` extra installs the additional Persian dependencies; `[alignment]`
+installs the model preparation dependency. For voices that do not use that phonemizer,
+install `./extras/piperService` without the Persian extra.
 
-Start with an existing model and its matching `.onnx.json` file:
+This service enables short Persian word repetition by default; standalone Piper
+keeps it disabled. Prepare a separate Mana model once from the original model and
+its matching `.onnx.json` file, then start the service:
 
 ```powershell
-.\extras\piperService\.venv\Scripts\python.exe -m sonata_piper --voice 'C:\Piper\voices\fa_IR-mana-medium.onnx'
+.\extras\piperService\.venv\Scripts\python.exe -m piper.prepare_short_speech `
+    --voice 'C:\Piper\voices\fa_IR-mana-medium.onnx' `
+    --output 'C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx'
+.\extras\piperService\.venv\Scripts\python.exe -m sonata_piper --voice 'C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx'
 ```
 
 The service listens on `127.0.0.1:50051`. Repeat `--voice` to register more models;
 `--port` changes the port. Keep the service running while using the driver.
 NVDA does not start or install it automatically.
+Preparation preserves the original model. To use it with ordinary synthesis, pass
+`--no-short-speech-repeat` to the service; this also supports older custom wheels
+without the repetition option.
 
 For enhanced Persian synthesis, provide both local assets explicitly:
 
 ```powershell
-.\extras\piperService\.venv\Scripts\python.exe -m sonata_piper --voice 'C:\Piper\voices\fa_IR-mana-medium.onnx' --persian-phonemizer --ezafe-model 'C:\Piper\ezafe_model_quantized' --homograph-dictionary 'C:\Piper\train-01.parquet'
+.\extras\piperService\.venv\Scripts\python.exe -m sonata_piper --voice 'C:\Piper\voices\fa_IR-mana-medium.short-repeat.onnx' --persian-phonemizer --ezafe-model 'C:\Piper\ezafe_model_quantized' --homograph-dictionary 'C:\Piper\train-01.parquet'
 ```
 
 The service requires the Ezafe model directory and homograph dictionary when this

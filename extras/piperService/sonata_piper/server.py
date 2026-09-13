@@ -278,8 +278,9 @@ def main(argv: list[str] | None = None) -> None:
 	parser.add_argument("--homograph-dictionary", help="Local Persian homograph dictionary file")
 	parser.add_argument(
 		"--short-speech-repeat",
-		action="store_true",
-		help="Enable Piper's experimental short Persian repetition and first-copy extraction; requires a prepared model",
+		action=argparse.BooleanOptionalAction,
+		default=True,
+		help="Repeat short Persian input and extract the first copy (default: enabled); requires a prepared model",
 	)
 	args = parser.parse_args(argv)
 	if not 1 <= args.port <= 65535:

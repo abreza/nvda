@@ -54,8 +54,12 @@ class PiperOptionTests(unittest.TestCase):
 		modules.start()
 		self.addCleanup(modules.stop)
 
-	def test_disabled_default_does_not_send_new_keyword_to_older_wheels(self):
+	def test_enabled_default_is_forwarded_to_piper(self):
 		loadPiperVoice(self.model, self.configPath)
+		self.assertTrue(self.loader.call_args.kwargs["use_short_speech_repeat"])
+
+	def test_disabled_option_does_not_send_new_keyword_to_older_wheels(self):
+		loadPiperVoice(self.model, self.configPath, shortSpeechRepeat=False)
 		self.assertNotIn("use_short_speech_repeat", self.loader.call_args.kwargs)
 
 	def test_enabled_option_is_forwarded_without_service_synthesis_changes(self):
@@ -68,9 +72,13 @@ class PiperOptionTests(unittest.TestCase):
 		self.assertEqual(self.engine.synthesize.call_args.args[1].volume, 0.5)
 		self.assertIs(self.engine.synthesize.call_args.kwargs["cancelled_callback"], cancelled)
 
-	def test_cli_only_requests_the_option_when_explicitly_enabled(self):
+	def test_cli_enables_repetition_by_default_and_accepts_both_switches(self):
 		voice = loadPiperVoice(self.model, self.configPath)
-		for extra, enabled in (([], False), (["--short-speech-repeat"], True)):
+		for extra, enabled in (
+			([], True),
+			(["--short-speech-repeat"], True),
+			(["--no-short-speech-repeat"], False),
+		):
 			with (
 				self.subTest(enabled=enabled),
 				mock.patch("sonata_piper.server.configuredVoices", return_value={"default": voice}) as loader,
